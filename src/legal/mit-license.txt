@@ -14,7 +14,7 @@ Your key obligations are:
 - Accept that the software is provided "as is" without warranty.
 
 Contribution and source:
-- Repository: https://github.com/eventmark-org/eventmark
+- Repository: https://github.com/voxondotorg/eventmark.org.git
 - Contributions are welcome through issues and pull requests.
 
 Official MIT license text
