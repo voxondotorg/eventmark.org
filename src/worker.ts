@@ -15,6 +15,7 @@ import jsqrJs from "./assets/jsqr.js";
 // @ts-expect-error TS7016 — country list for searchable event location picker
 import countriesJs from "./assets/countries.js";
 import mitLicenseText from "./legal/mit-license.txt";
+import thirdPartyNoticesText from "./legal/third-party-notices.txt";
 import type { AuthEnv } from "./auth.js";
 import {
   clearSessionCookieHeader,
@@ -30,7 +31,15 @@ import {
   verifyOtpAndCreateSession,
   verifyTurnstile,
 } from "./auth.js";
-import { generateTicketCode, isCode39Compatible, renderCode39Svg } from "./barcode.js";
+import { generateTicketCode } from "./ticket-code.js";
+import { renderQrSvg, ticketCheckinUrl, ticketQrImageUrl } from "./qrcode.js";
+import {
+  checkInByTicketPassToken,
+  ensureTicketPassToken,
+  previewTicketPassToken,
+  saveIssuedTicket,
+  ticketPassSecretFromEnv,
+} from "./ticket-pass.js";
 import {
   decideOrgRequest,
   listAdminOrgRequests,
@@ -106,7 +115,6 @@ import {
   saveInterest,
   saveRegistration,
   saveSettings,
-  saveTicket,
   saveUser,
   saveWaitlist,
   searchEvents,
@@ -206,12 +214,12 @@ async function applyAdminBootstrap(env: Env, user: UserRecord): Promise<UserReco
   return next;
 }
 
+function sitePublicUrl(env: Env, requestUrl: URL): string {
+  return (env.PUBLIC_SITE_URL || "").trim() || siteOrigin(requestUrl);
+}
+
 function invitePassSecret(env: Env): string {
-  const secret = (env.INVITE_PASS_SECRET || env.TURNSTILE_SECRET_KEY || "").trim();
-  if (!secret && !isLocalDev(env)) {
-    throw new Error("INVITE_PASS_SECRET is not configured");
-  }
-  return secret || "eventmark-invite-local-only";
+  return ticketPassSecretFromEnv(env);
 }
 
 function isHttpUrl(value: string | null | undefined): boolean {
@@ -401,6 +409,14 @@ async function dispatch(
       },
     });
   }
+  if (method === "GET" && pathname === "/third-party") {
+    return new Response(thirdPartyNoticesText, {
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "public, max-age=86400",
+      },
+    });
+  }
 
   if (pathname.startsWith("/api/")) {
     return handleApi(request, env, ctx, secure);
@@ -472,17 +488,18 @@ async function promoteNextWaitlistedAttendee(
     ticketCode,
   };
   await saveRegistration(env.KV, reg);
-  await saveTicket(env.KV, ticketCode, {
-    eventId: event.id,
-    userId: next.userId,
-    registrationId: reg.id,
-  });
+  await saveIssuedTicket(
+    env.KV,
+    ticketCode,
+    { eventId: event.id, userId: next.userId, registrationId: reg.id },
+    invitePassSecret(env)
+  );
   await deleteWaitlist(env.KV, event.id, next.userId, next.createdAt);
 
   const targetUser = await getUserById(env.KV, next.userId);
   if (targetUser) {
     try {
-      const origin = `${baseUrl.protocol}//${baseUrl.host}`;
+      const publicSite = sitePublicUrl(env, baseUrl);
       await sendRegistrationEmail(env, targetUser.email, {
         eventTitle: event.title,
         eventStartsAt: event.startsAt,
@@ -490,7 +507,7 @@ async function promoteNextWaitlistedAttendee(
         eventMode: event.mode ?? "in_person",
         onlineUrl: event.online_url ?? null,
         ticketCode,
-        ticketUrl: `${origin}/api/tickets/${ticketCode}/barcode.svg`,
+        ticketUrl: ticketQrImageUrl(publicSite, ticketCode),
       });
     } catch {
       // Non-fatal: promotion succeeded even if mail delivery fails.
@@ -1309,6 +1326,22 @@ async function handleApi(
     });
   }
 
+  if (method === "GET" && parts[0] === "api" && parts[1] === "checkin" && parts[2] === "verify") {
+    const token = new URL(request.url).searchParams.get("token")?.trim();
+    if (!token) return json({ valid: false }, { status: 400 });
+    const preview = await previewTicketPassToken(env.KV, token, invitePassSecret(env));
+    if (!preview.valid) return json({ valid: false });
+    const event = preview.eventId ? await getEvent(env.KV, preview.eventId) : null;
+    return json({
+      valid: true,
+      checkedIn: preview.checkedIn,
+      checkedInAt: preview.checkedInAt ?? null,
+      eventId: preview.eventId,
+      eventTitle: event?.title ?? null,
+      ticketCode: preview.ticketCode ?? null,
+    });
+  }
+
   if (method === "POST" && parts[0] === "api" && parts[1] === "checkin" && parts[2] === "scan") {
     const body = await readJson<{ token?: string; eventId?: string; turnstileToken?: string }>(request);
     if (!body?.token || !body.eventId) return json({ error: "invalid_body" }, { status: 400 });
@@ -1328,12 +1361,35 @@ async function handleApi(
       if (recentCheckinTokenSeen.size > 2000) {
         recentCheckinTokenSeen.clear();
       }
+      if (res.invite && res.invite.eventId !== body.eventId) {
+        return json({ error: "wrong_event" }, { status: 400 });
+      }
+      return json({ ok: true, type: "invite", invite: res.invite });
     }
-    if (!res.ok) return json({ error: res.reason || "checkin_failed" }, { status: 400 });
-    if (res.invite && res.invite.eventId !== body.eventId) {
-      return json({ error: "wrong_event" }, { status: 400 });
+    const ticketRes = await checkInByTicketPassToken(env.KV, token, invitePassSecret(env));
+    if (ticketRes.ok) {
+      recentCheckinTokenSeen.set(token, now);
+      if (recentCheckinTokenSeen.size > 2000) {
+        recentCheckinTokenSeen.clear();
+      }
+      if (ticketRes.entry && ticketRes.entry.eventId !== body.eventId) {
+        return json({ error: "wrong_event" }, { status: 400 });
+      }
+      return json({
+        ok: true,
+        type: "ticket",
+        attendee: {
+          name: ticketRes.attendeeName,
+          email: ticketRes.attendeeEmail,
+        },
+        checkedInAt: ticketRes.entry?.checkedInAt ?? null,
+      });
     }
-    return json({ ok: true, invite: res.invite });
+    const reason = ticketRes.reason || res.reason || "checkin_failed";
+    if (reason === "already_used" || reason === "already_checked_recently") {
+      return json({ error: reason }, { status: 409 });
+    }
+    return json({ error: reason }, { status: 400 });
   }
 
   if (
@@ -1474,14 +1530,16 @@ async function handleApi(
 
   if (method === "GET" && parts[0] === "api" && parts[1] === "tickets" && parts[2]) {
     const code = parts[2];
-    const isSvg = parts[3] === "barcode.svg";
+    const asset = parts[3];
+    const isQrSvg = asset === "qr.svg";
     const entry = await getTicket(env.KV, code);
     if (!entry) return new Response("Not Found", { status: 404 });
-    if (!isSvg) return json({ ticket: entry });
-    if (!isCode39Compatible(code.toUpperCase())) {
-      return new Response("Unsupported", { status: 400 });
-    }
-    const svg = renderCode39Svg(code);
+    if (!isQrSvg) return json({ ticket: entry });
+    const ensured = await ensureTicketPassToken(env.KV, code, invitePassSecret(env));
+    if (!ensured) return new Response("Not Found", { status: 404 });
+    const publicSite = sitePublicUrl(env, url);
+    const checkinUrl = ticketCheckinUrl(publicSite, ensured.token);
+    const svg = renderQrSvg(checkinUrl, { size: 280 });
     return new Response(svg, {
       headers: {
         "content-type": "image/svg+xml; charset=utf-8",
@@ -1792,12 +1850,13 @@ async function handleApi(
       ticketCode,
     };
     await saveRegistration(env.KV, reg);
-    await saveTicket(env.KV, ticketCode, {
-      eventId: ev.id,
-      userId: user.id,
-      registrationId: reg.id,
-    });
-    const origin = `${url.protocol}//${url.host}`;
+    await saveIssuedTicket(
+      env.KV,
+      ticketCode,
+      { eventId: ev.id, userId: user.id, registrationId: reg.id },
+      invitePassSecret(env)
+    );
+    const publicSite = sitePublicUrl(env, url);
     try {
       await sendRegistrationEmail(env, user.email, {
         eventTitle: ev.title,
@@ -1806,7 +1865,7 @@ async function handleApi(
         eventMode: ev.mode ?? "in_person",
         onlineUrl: ev.online_url ?? null,
         ticketCode,
-        ticketUrl: `${origin}/api/tickets/${ticketCode}/barcode.svg`,
+        ticketUrl: ticketQrImageUrl(publicSite, ticketCode),
       });
     } catch (err) {
       // Non-fatal: registration is saved even if mail fails (admin can re-issue).
@@ -2021,7 +2080,7 @@ async function handleApi(
     const okTs = await requireTurnstile(env, request, body.turnstileToken);
     if (!okTs) return json({ error: "turnstile_failed" }, { status: 400 });
     const { turnstileToken: _t, ...rest } = body;
-    const origin = `${url.protocol}//${url.host}`;
+    const origin = sitePublicUrl(env, url);
     const res = await handleContributionSubmit(env.KV, env, user, rest, origin);
     if (!res.ok) return json({ error: res.error }, { status: 400 });
     return json({ contribution: res.contribution });

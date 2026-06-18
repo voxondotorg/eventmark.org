@@ -4,7 +4,9 @@ Open-source event discovery and registration platform.
 
 This repository is **source code only**. There is no deploy config, no cloud account IDs, and no secrets. Clone it, read it, and run or host it however you like.
 
-**License:** [MIT](LICENSE) — see [Licensing](#licensing) below.
+**License:** [MIT](LICENSE)
+
+**Third-party open source:** Ticket QR generation and scanning use vendored libraries (Project Nayuki QR generator, jsQR). See `src/legal/third-party-notices.txt` for attributions.
 
 ---
 
@@ -18,7 +20,7 @@ src/                 Main app — HTML, CSS, JavaScript, TypeScript
   worker.ts          Server / API layer (TypeScript)
   *.ts               Auth, database helpers, features
   assets/            Images, icons, static JS
-  legal/             License text
+  legal/             License text and third-party notices
 
 admin-portal/        Optional admin UI (TypeScript)
   src/worker.ts      Admin server + UI
@@ -60,31 +62,11 @@ Nothing in this repo pins you to a specific host. Adapt the worker layer to Node
 
 ## Contributing
 
-Pull requests and issues are welcome. Please do not commit API keys, passwords, or personal email addresses.
+Pull requests and issues are welcome on GitHub:
 
-Repository: [https://github.com/voxondotorg/eventmark.org](https://github.com/voxondotorg/eventmark.org)
+**https://github.com/voxondotorg/eventmark.org**
 
----
-
-## Licensing
-
-This project is open source and released under the [MIT License](LICENSE).
-
-In simple terms, MIT allows you to:
-
-- Use EventMark for personal, community, educational, and commercial projects.
-- Copy and modify the code for your own deployment.
-- Distribute your modified version.
-- Integrate the code into larger systems.
-
-Your key obligations are:
-
-- Keep the copyright notice and MIT license text in copies or substantial portions.
-- Accept that the software is provided "as is" without warranty.
-
-Copyright (c) 2026 [Voxon](https://voxon.org) and EventMark contributors.
-
-The full license text (including in-app notes) is also in [`src/legal/mit-license.txt`](src/legal/mit-license.txt).
+Please do not commit API keys, passwords, or personal email addresses.
 
 ---
 

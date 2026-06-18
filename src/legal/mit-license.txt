@@ -14,8 +14,13 @@ Your key obligations are:
 - Accept that the software is provided "as is" without warranty.
 
 Contribution and source:
-- Repository: https://github.com/voxondotorg/eventmark.org.git
+- Repository: https://github.com/eventmark-org/eventmark
 - Contributions are welcome through issues and pull requests.
+
+Third-party open source
+-------------------------
+EventMark bundles additional open source components (for example, QR code
+generation and scanning). See /third-party for copyright and license notices.
 
 Official MIT license text
 -------------------------

@@ -26,13 +26,14 @@ import {
   saveEvent,
   saveInterest,
   saveRegistration,
-  saveTicket,
   saveWaitlist,
   submitContribution,
   tryReserveEventSeat,
   updateContribution,
 } from "./db.js";
-import { generateTicketCode } from "./barcode.js";
+import { generateTicketCode } from "./ticket-code.js";
+import { ticketQrImageUrl } from "./qrcode.js";
+import { saveIssuedTicket, ticketPassSecretFromEnv } from "./ticket-pass.js";
 import type { AuthEnv } from "./auth.js";
 import { sendContributionStatusEmail, sendRegistrationEmail } from "./auth.js";
 
@@ -131,10 +132,10 @@ function buildPayloadFromUpdate(
 
 export async function handleContributionSubmit(
   kv: KVNamespace,
-  env: AuthEnv,
+  env: AuthEnv & { INVITE_PASS_SECRET?: string; TURNSTILE_SECRET_KEY?: string; LOCAL_DEV?: string; PUBLIC_SITE_URL?: string },
   user: UserRecord,
   body: ContributionSubmitBody,
-  origin: string
+  siteOrigin: string
 ): Promise<
   { ok: true; contribution: ContributionRecord } | { ok: false; error: string }
 > {
@@ -195,13 +196,15 @@ export async function handleContributionSubmit(
         createdAt: new Date().toISOString(),
       };
       await saveRegistration(kv, registration);
-      await saveTicket(kv, ticketCode, {
-        eventId: event.id,
-        userId: user.id,
-        registrationId: registration.id,
-      });
+      await saveIssuedTicket(
+        kv,
+        ticketCode,
+        { eventId: event.id, userId: user.id, registrationId: registration.id },
+        ticketPassSecretFromEnv(env)
+      );
       event.registeredCount = (event.registeredCount ?? 0) + 1;
       try {
+        const publicSite = (env.PUBLIC_SITE_URL || "").trim() || siteOrigin;
         await sendRegistrationEmail(env, user.email, {
           eventTitle: event.title,
           eventStartsAt: event.startsAt,
@@ -209,7 +212,7 @@ export async function handleContributionSubmit(
           eventMode: event.mode ?? "in_person",
           onlineUrl: event.online_url ?? null,
           ticketCode,
-          ticketUrl: `${origin}/api/tickets/${ticketCode}/barcode.svg`,
+          ticketUrl: ticketQrImageUrl(publicSite, ticketCode),
         });
       } catch (err) {
         console.error("[EventMark] contribution registration email failed", {

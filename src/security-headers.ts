@@ -60,6 +60,7 @@ export function securityProfileFor(request: Request): SecurityProfile {
     pathname === "/styles.css" ||
     pathname === "/app.js" ||
     pathname === "/license" ||
+    pathname === "/third-party" ||
     pathname.startsWith("/assets/")
   ) {
     return "asset";

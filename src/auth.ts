@@ -418,7 +418,7 @@ export async function sendOrgRequestStatusEmail(
           `1. Sign in and open: ${args.organizeUrl}`,
           "2. Create a draft event (title, date, location or online link, seats).",
           "3. Publish when ready — your event appears on the public calendar.",
-          "4. In-person attendees receive a barcoded ticket by email after registration.",
+          "4. In-person attendees receive a QR ticket by email after registration.",
         ]
       : args.status === "INFO_REQUESTED"
         ? [
@@ -454,7 +454,7 @@ export async function sendOrgRequestStatusEmail(
   await sendCodedEmail(env, to, subject, lines, "OrgRequestStatus");
 }
 
-/** Confirmation email for a native event registration; includes ticket code + barcode link. */
+/** Confirmation email for a native event registration; includes ticket code + QR link. */
 export async function sendRegistrationEmail(
   env: AuthEnv,
   to: string,
@@ -479,7 +479,7 @@ export async function sendRegistrationEmail(
         : `Where: ${args.eventLocation}`,
     "",
     `Ticket code: ${args.ticketCode}`,
-    `Show at the door: ${args.ticketUrl}`,
+    `Show at the door (scan QR): ${args.ticketUrl}`,
     "",
     "Reply if you have questions. See you soon!",
   ].join("\r\n");

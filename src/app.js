@@ -1443,6 +1443,8 @@
       setFlash("Admin pages are behind Zero Trust and are not exposed in this public app.", "info");
       if (window.location.hash !== "#/") window.location.hash = "#/";
       p = renderHome();
+    } else if (parts[0] === "checkin") {
+      p = renderCheckin();
     } else if (parts[0] === "about") {
       p = renderAbout();
     } else if (parts[0] === "hemw") {
@@ -1522,17 +1524,106 @@
       "<ol class='hemw-steps'>" +
       "<li><strong>Find an event</strong> — browse the home page, open the Calendar, or subscribe to events with ICS export.</li>" +
       "<li><strong>Sign in by email</strong> — type your email, get a short code, you are in. No password to remember.</li>" +
-      "<li><strong>Save interest or register</strong> — keep the date, or sign up. For online events you get a join link in your dashboard. For in-person events you get a ticket with a barcode by email.</li>" +
+      "<li><strong>Save interest or register</strong> — keep the date, or sign up. For online events you get a join link in your dashboard. For in-person events you get a ticket with a QR code by email.</li>" +
       "</ol>" +
       "<h3>If you want to run events</h3>" +
       "<ol class='hemw-steps'>" +
       "<li><strong>Apply as an organizer</strong> — quick check, a one-time email code, then a short application: name, website, what you do, your directors, and a motto.</li>" +
       "<li><strong>EventMark admin reviews</strong> — they can approve, reject with a reason, or ask for more info.</li>" +
       "<li><strong>Create events as drafts</strong> — drafts are private to you. Add a title, description, location, set seats (min/max), choose format (in-person, online, or hybrid), add speakers, and pick a category (open source). You can also use external registration if you manage signups elsewhere.</li>" +
-      "<li><strong>Publish</strong> — the event shows on the public calendar. In-person attendees get a barcoded ticket by email. Online attendees see your join link in their dashboard. Organizers can invite speaker and volunteer contributions.</li>" +
+      "<li><strong>Publish</strong> — the event shows on the public calendar. In-person attendees get a QR ticket by email. Online attendees see your join link in their dashboard. Organizers can invite speaker and volunteer contributions.</li>" +
       "</ol>";
     layout(html);
     return Promise.resolve();
+  }
+
+  function renderCheckin() {
+    var query = parseHashQuery();
+    var ticketToken = (query.token || "").trim();
+    var checkinTs = { value: "" };
+    layout(
+      "<section class='card'>" +
+        "<h2>EventMark ticket check-in</h2>" +
+        "<p class='muted'>Scanning opens this page on EventMark. Present the QR to event staff at the door.</p>" +
+        "<div id='checkin-panel' class='muted'>" +
+        (ticketToken ? "Verifying ticket…" : "Missing ticket token.") +
+        "</div>" +
+        "<div id='ts-checkin'></div>" +
+        "<p><a href='#/'>← Back to events</a></p>" +
+        "</section>"
+    );
+    renderTurnstile("ts-checkin", checkinTs, function () {});
+    if (!ticketToken) return Promise.resolve();
+    return api("/api/checkin/verify?token=" + encodeURIComponent(ticketToken))
+      .then(function (data) {
+        var panel = $("#checkin-panel");
+        if (!panel) return;
+        if (!data || !data.valid) {
+          panel.innerHTML = "<p class='flash error'>This ticket QR is not valid.</p>";
+          return;
+        }
+        var statusHtml = data.checkedIn
+          ? "<p><strong>Status:</strong> Already checked in" +
+            (data.checkedInAt ? " at " + escapeHtml(formatEventDateTime(data.checkedInAt)) : "") +
+            ".</p>"
+          : "<p><strong>Status:</strong> Valid ticket — not checked in yet.</p>";
+        panel.innerHTML =
+          "<p><strong>Event:</strong> " + escapeHtml(data.eventTitle || "Event") + "</p>" +
+          statusHtml +
+          "<p class='muted'>Ticket code: <code>" + escapeHtml(data.ticketCode || "") + "</code></p>" +
+          "<div id='checkin-staff-actions'></div>";
+        if (data.checkedIn || !data.eventId) return;
+        var actions = $("#checkin-staff-actions");
+        if (!actions) return;
+        actions.innerHTML =
+          "<hr />" +
+          "<p class='muted'>Event staff: complete the security check above, then check in this guest.</p>" +
+          "<button type='button' id='checkin-staff-btn' class='btn-primary'>Check in guest</button>" +
+          "<div id='checkin-staff-result' class='muted'></div>";
+        var btn = $("#checkin-staff-btn");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+          if (!state.user) {
+            openLoginModal(function () {
+              route();
+            });
+            return;
+          }
+          if (!checkinTs.value) {
+            toast("Complete the security check first.", "info");
+            return;
+          }
+          btn.disabled = true;
+          api("/api/checkin/scan", {
+            method: "POST",
+            body: JSON.stringify({
+              eventId: data.eventId,
+              token: ticketToken,
+              turnstileToken: checkinTs.value,
+            }),
+          })
+            .then(function (result) {
+              var node = $("#checkin-staff-result");
+              var guest =
+                result && result.type === "ticket" && result.attendee
+                  ? result.attendee.name || result.attendee.email
+                  : result && result.invite
+                    ? result.invite.name || result.invite.email
+                    : "guest";
+              if (node) node.innerHTML = "Checked in: <strong>" + escapeHtml(guest) + "</strong>";
+              toast("Check-in successful.", "success");
+              route();
+            })
+            .catch(function (err) {
+              btn.disabled = false;
+              toast(friendlyError(err, "Check-in failed."), "error");
+            });
+        });
+      })
+      .catch(function () {
+        var panel = $("#checkin-panel");
+        if (panel) panel.innerHTML = "<p class='flash error'>Could not verify this ticket.</p>";
+      });
   }
 
   function renderAbout() {
@@ -1553,9 +1644,10 @@
       "<h3>Who builds it</h3>" +
       "<p>EventMark is built with care by contributors and maintainers who believe open communities deserve dependable event infrastructure. " +
       "It is an initiative product launch by voxon.org&reg;. " +
-      '<a href="https://github.com/eventmark-org/eventmark" rel="noopener noreferrer" target="_blank">Contribute on GitHub</a>.</p>' +
+      '<a href="https://github.com/voxondotorg/eventmark.org" rel="noopener noreferrer" target="_blank">Contribute on GitHub</a>.</p>' +
       "<h3>Open Source License</h3>" +
       "<p>EventMark is released under the <a href='/license'>MIT License</a>. Read full details on the license page.</p>" +
+      "<p>Ticket QR generation and scanning use additional open source components. See <a href='/third-party'>third-party notices</a> for attributions.</p>" +
       "<p class='muted'>Want to contribute? Open issues and pull requests on GitHub.</p>";
     layout(html);
     return Promise.resolve();
@@ -1823,7 +1915,7 @@
       var payload = isResubmit && existing ? existing.payload || {} : {};
       var body = "";
       if (role === "participant") {
-        body = "<p class='muted'>Complete your registration to receive a ticket with barcode.</p>";
+        body = "<p class='muted'>Complete your registration to receive a ticket with QR code.</p>";
       } else if (role === "speaker") {
         body =
           '<div class="field"><label>Topic Title *</label><input type="text" id="contrib-topic-title" placeholder="Your talk title" value="' + escapeHtml(payload.topicTitle || "") + '" /></div>' +
@@ -2215,7 +2307,7 @@
             var ticketId = "ticket-" + Math.random().toString(36).substr(2, 9);
             ticketHtml =
               "<div class='ticket' id='" + ticketId + "'><div><strong>Ticket:</strong> <code>" + escapeHtml(ticketCode) + "</code></div>" +
-              "<img alt='Ticket barcode' src='/api/tickets/" + encodeURIComponent(ticketCode) + "/barcode.svg' loading='lazy' />" +
+              "<img alt='Ticket QR code' src='/api/tickets/" + encodeURIComponent(ticketCode) + "/qr.svg' loading='lazy' />" +
               "<div class='ticket-fallback' style='display:none; padding: 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius); font-size: 0.875rem;'>" +
               "Show this code at check-in: <strong style='color: var(--text-primary); font-size: 1.1rem;'>" + escapeHtml(ticketCode) + "</strong>" +
               "</div></div>" +
@@ -3497,12 +3589,12 @@
         "</div>" +
         "<div id='suite-invites' class='muted'>No invite data loaded.</div>" +
         "<hr class='suite-sep' />" +
-        "<div class='field'><label>Check-in token (from QR)</label><input id='suite-checkin-token' placeholder='Paste pass token to check in' /></div>" +
+        "<div class='field'><label>Check-in token (from QR)</label><input id='suite-checkin-token' placeholder='Paste token or scan ticket QR' /></div>" +
         "<button type='button' id='suite-checkin' class='btn-primary'>Check in guest</button>" +
         "<div id='suite-checkin-result' class='muted'></div>" +
         "<div class='suite-scanner card'>" +
         "<h4>Camera QR scanner</h4>" +
-        "<p class='muted'>Use device camera to scan pass QR for check-in staff. Camera access is required.</p>" +
+        "<p class='muted'>Use device camera to scan ticket or pass QR codes for check-in staff. Camera access is required.</p>" +
         "<div id='suite-scan-permission' class='muted'>Camera permission not requested yet.</div>" +
         "<video id='suite-scan-video' playsinline muted autoplay></video>" +
         "<canvas id='suite-scan-canvas' hidden aria-hidden='true'></canvas>" +
@@ -3903,10 +3995,13 @@
         .then(function (data) {
           var node = $("#suite-checkin-result");
           if (node) {
-            node.innerHTML =
-              "Checked in: <strong>" +
-              escapeHtml((data.invite && (data.invite.name || data.invite.email)) || "guest") +
-              "</strong>";
+            var guestName = "guest";
+            if (data && data.type === "ticket" && data.attendee) {
+              guestName = data.attendee.name || data.attendee.email || "guest";
+            } else if (data && data.invite) {
+              guestName = data.invite.name || data.invite.email || "guest";
+            }
+            node.innerHTML = "Checked in: <strong>" + escapeHtml(guestName) + "</strong>";
           }
           if (!fromScanner) {
             toast("Check-in successful.", "success");
@@ -3967,18 +4062,59 @@
       });
     }
 
+    function suiteIsEventMarkHost(hostname) {
+      if (!hostname) return false;
+      var h = String(hostname).toLowerCase();
+      if (h === String(window.location.hostname || "").toLowerCase()) return true;
+      if (h === "eventmark.org" || h === "www.eventmark.org") return true;
+      if (h.slice(-13) === ".eventmark.org") return true;
+      if (h.indexOf("eventmark.randomflux.online") >= 0) return true;
+      return false;
+    }
+
+    function suiteExtractCheckinToken(raw) {
+      var s = (raw || "").trim();
+      if (!s) return "";
+      if (s.indexOf("http://") === 0 || s.indexOf("https://") === 0) {
+        try {
+          var u = new URL(s);
+          if (!suiteIsEventMarkHost(u.hostname)) return "";
+          var token = u.searchParams.get("token");
+          if (token) return token;
+          if (u.hash) {
+            var hashPart = u.hash.replace(/^#/, "");
+            var qIdx = hashPart.indexOf("?");
+            if (hashPart.split("?")[0].replace(/^\//, "") === "checkin" && qIdx >= 0) {
+              var params = new URLSearchParams(hashPart.slice(qIdx + 1));
+              token = params.get("token");
+              if (token) return token;
+            }
+          }
+        } catch (e) {
+          return "";
+        }
+        return "";
+      }
+      return s;
+    }
+
     function suiteHandleScannedToken(raw) {
       if (!raw) return;
-      var now = Date.now();
-      if (scannerState.lastToken === raw && now - scannerState.lastTokenAt < 1500) {
+      var token = suiteExtractCheckinToken(raw);
+      if (!token) {
+        suiteSetScanStatus("QR must link to EventMark check-in.");
         return;
       }
-      scannerState.lastToken = raw;
+      var now = Date.now();
+      if (scannerState.lastToken === token && now - scannerState.lastTokenAt < 1500) {
+        return;
+      }
+      scannerState.lastToken = token;
       scannerState.lastTokenAt = now;
       var tokenInput = $("#suite-checkin-token");
-      if (tokenInput) tokenInput.value = raw;
+      if (tokenInput) tokenInput.value = token;
       suiteSetScanStatus("Token scanned. Checking in…");
-      suiteRunCheckin(raw, true).then(function () {
+      suiteRunCheckin(token, true).then(function () {
         suiteSetScanStatus("Scan next QR code.");
       });
     }

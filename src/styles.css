@@ -481,6 +481,7 @@ body.light .theme-icon-sun {
   display: none;
   overflow: hidden;
   width: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
 
@@ -1116,6 +1117,7 @@ button.is-loading {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   cursor: default;
+  -webkit-user-select: none;
   user-select: none;
   flex-shrink: 0;
 }

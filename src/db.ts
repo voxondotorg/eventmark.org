@@ -139,6 +139,8 @@ export interface RegistrationRecord {
   createdAt: string;
   /** Short alphanumeric ticket emailed to attendee; absent on legacy rows. */
   ticketCode?: string;
+  /** Set when attendee is checked in at the door via QR scan. */
+  checkedInAt?: string | null;
 }
 
 export interface InterestRecord {
@@ -1267,6 +1269,9 @@ export interface TicketIndexEntry {
   eventId: string;
   userId: string;
   registrationId: string;
+  /** Signed token embedded in the ticket QR code. */
+  ticketToken?: string | null;
+  checkedInAt?: string | null;
 }
 
 export async function deleteTicket(kv: KVNamespace, code: string): Promise<void> {
