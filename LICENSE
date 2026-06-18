@@ -1,3 +1,25 @@
+EventMark Licensing Notes
+=========================
+
+This project is opensource and released under the MIT License.
+
+In simple terms, MIT allows you to:
+- Use EventMark for personal, community, educational, and commercial projects.
+- Copy and modify the code for your own deployment.
+- Distribute your modified version.
+- Integrate the code into larger systems.
+
+Your key obligations are:
+- Keep the copyright notice and MIT license text in copies/substantial portions.
+- Accept that the software is provided "as is" without warranty.
+
+Contribution and source:
+- Repository: https://github.com/voxondotorg/eventmark.org.git
+- Contributions are welcome through issues and pull requests.
+
+Official MIT license text
+-------------------------
+
 MIT License
 
 Copyright (c) 2026 Voxon (voxon.org) and EventMark contributors
