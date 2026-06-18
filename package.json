@@ -1,0 +1,21 @@
+{
+  "name": "eventmark",
+  "version": "1.0.0",
+  "private": false,
+  "description": "EventMark — open-source event discovery and registration (source only)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voxondotorg/eventmark.org.git"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && cd admin-portal && tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260430.0",
+    "typescript": "^5.8.3"
+  }
+}
