@@ -148,6 +148,13 @@ import {
   verifyPassToken,
   type InviteRole,
 } from "./invitation-platform.js";
+import {
+  addOrgCheckinStaff,
+  listOrgCheckinStaff,
+  removeOrgCheckinStaff,
+  userHasEventCheckinAccess,
+  userHasOrgOrganizerAccess,
+} from "./checkin-staff.js";
 
 /** Omit placeholder / invalid keys so the client does not load Turnstile with a broken sitekey (avoids 400 / 400020 noise). */
 function turnstileSiteKeyForClient(raw: string | undefined): string {
@@ -269,6 +276,36 @@ async function requireEventOrganizerOrAdmin(
     return { ok: false, response: json({ error: "forbidden" }, { status: 403 }) };
   }
   return { ok: true, user, event: ev };
+}
+
+async function requireEventCheckinAccess(
+  env: Env,
+  request: Request,
+  eventId: string
+): Promise<{ ok: true; user: UserRecord; event: EventRecord } | { ok: false; response: Response }> {
+  const sessionUser = await resolveSessionUser(env.KV, request.headers.get("Cookie"));
+  if (!sessionUser) return { ok: false, response: json({ error: "unauthorized" }, { status: 401 }) };
+  const user = await applyAdminBootstrap(env, sessionUser);
+  const ev = await getEvent(env.KV, eventId);
+  if (!ev) return { ok: false, response: json({ error: "not_found" }, { status: 404 }) };
+  if (!userHasEventCheckinAccess(user, ev)) {
+    return { ok: false, response: json({ error: "forbidden" }, { status: 403 }) };
+  }
+  return { ok: true, user, event: ev };
+}
+
+async function requireOrgOrganizerAccess(
+  env: Env,
+  request: Request,
+  orgId: string
+): Promise<{ ok: true; user: UserRecord } | { ok: false; response: Response }> {
+  const sessionUser = await resolveSessionUser(env.KV, request.headers.get("Cookie"));
+  if (!sessionUser) return { ok: false, response: json({ error: "unauthorized" }, { status: 401 }) };
+  const user = await applyAdminBootstrap(env, sessionUser);
+  if (!userHasOrgOrganizerAccess(user, orgId)) {
+    return { ok: false, response: json({ error: "forbidden" }, { status: 403 }) };
+  }
+  return { ok: true, user };
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
@@ -877,6 +914,81 @@ async function handleApi(
     return json({ items });
   }
 
+  if (method === "GET" && parts[0] === "api" && parts[1] === "me" && parts[2] === "checkin-organizations") {
+    const user = await resolveSessionUser(env.KV, request.headers.get("Cookie"));
+    if (!user) return json({ error: "unauthorized" }, { status: 401 });
+    const u = await applyAdminBootstrap(env, user);
+    const orgIds = u.checkinOrganizationIds || [];
+    if (orgIds.length === 0) return json({ items: [] });
+    const orgs = await Promise.all(orgIds.map((id) => getOrg(env.KV, id)));
+    const items = orgs.filter((o): o is NonNullable<typeof o> => Boolean(o));
+    return json({ items });
+  }
+
+  if (method === "GET" && parts[0] === "api" && parts[1] === "checkin-desk" && parts[2] === "events") {
+    const user = await resolveSessionUser(env.KV, request.headers.get("Cookie"));
+    if (!user) return json({ error: "unauthorized" }, { status: 401 });
+    const u = await applyAdminBootstrap(env, user);
+    const orgId = url.searchParams.get("organizationId")?.trim();
+    if (!orgId) return json({ error: "invalid_body" }, { status: 400 });
+    const allowed =
+      (u.checkinOrganizationIds || []).includes(orgId) ||
+      (u.organizationIds || []).includes(orgId) ||
+      u.roles.includes("admin");
+    if (!allowed) return json({ error: "forbidden" }, { status: 403 });
+    const checkinOnly =
+      !(u.organizationIds || []).includes(orgId) && !u.roles.includes("admin");
+    const limit = 200;
+    const all: EventRecord[] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 5; i++) {
+      const page = await listEvents(env.KV, limit, cursor, true);
+      all.push(...page.items);
+      if (!page.hasMore || !page.cursor) break;
+      cursor = page.cursor;
+    }
+    const items = all.filter((e) => {
+      if (e.organizationId !== orgId) return false;
+      if (checkinOnly) return e.status === "published";
+      return true;
+    });
+    return json({ items });
+  }
+
+  if (method === "GET" && parts[0] === "api" && parts[1] === "organizations" && parts[2] && parts[3] === "checkin-staff") {
+    const auth = await requireOrgOrganizerAccess(env, request, parts[2]);
+    if (!auth.ok) return auth.response;
+    const items = await listOrgCheckinStaff(env.KV, parts[2]);
+    return json({ items });
+  }
+
+  if (method === "POST" && parts[0] === "api" && parts[1] === "organizations" && parts[2] && parts[3] === "checkin-staff") {
+    const auth = await requireOrgOrganizerAccess(env, request, parts[2]);
+    if (!auth.ok) return auth.response;
+    const body = await readJson<{ email?: string; turnstileToken?: string }>(request);
+    if (!body?.email) return json({ error: "invalid_body" }, { status: 400 });
+    const okTs = await requireTurnstile(env, request, body.turnstileToken);
+    if (!okTs) return json({ error: "turnstile_failed" }, { status: 400 });
+    const res = await addOrgCheckinStaff(env.KV, parts[2], body.email, auth.user.id);
+    if (!res.ok) return json({ error: res.error }, { status: 400 });
+    return json({ staff: res.staff });
+  }
+
+  if (
+    method === "DELETE" &&
+    parts[0] === "api" &&
+    parts[1] === "organizations" &&
+    parts[2] &&
+    parts[3] === "checkin-staff" &&
+    parts[4]
+  ) {
+    const auth = await requireOrgOrganizerAccess(env, request, parts[2]);
+    if (!auth.ok) return auth.response;
+    const removed = await removeOrgCheckinStaff(env.KV, parts[2], parts[4]);
+    if (!removed) return json({ error: "not_found" }, { status: 404 });
+    return json({ ok: true });
+  }
+
   if (method === "GET" && parts[0] === "api" && parts[1] === "organizer" && parts[2] === "events" && parts.length === 3) {
     const user = await resolveSessionUser(env.KV, request.headers.get("Cookie"));
     if (!user) return json({ error: "unauthorized" }, { status: 401 });
@@ -1322,7 +1434,7 @@ async function handleApi(
   if (method === "POST" && parts[0] === "api" && parts[1] === "checkin" && parts[2] === "scan") {
     const body = await readJson<{ token?: string; eventId?: string; turnstileToken?: string }>(request);
     if (!body?.token || !body.eventId) return json({ error: "invalid_body" }, { status: 400 });
-    const auth = await requireEventOrganizerOrAdmin(env, request, body.eventId);
+    const auth = await requireEventCheckinAccess(env, request, body.eventId);
     if (!auth.ok) return auth.response;
     const okTs = await requireTurnstile(env, request, body.turnstileToken);
     if (!okTs) return json({ error: "turnstile_failed" }, { status: 400 });

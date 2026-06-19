@@ -14,6 +14,7 @@ import type {
   UserRecord,
   VolunteerPayload,
 } from "./db.js";
+import { userHasOrgOrganizerAccess } from "./checkin-staff.js";
 import {
   getContribution,
   getEvent,
@@ -132,7 +133,7 @@ function buildPayloadFromUpdate(
 
 export async function handleContributionSubmit(
   kv: KVNamespace,
-  env: AuthEnv & { INVITE_PASS_SECRET?: string; TURNSTILE_SECRET_KEY?: string; LOCAL_DEV?: string; PUBLIC_SITE_URL?: string },
+  env: AuthEnv & { INVITE_PASS_SECRET?: string; LOCAL_DEV?: string; PUBLIC_SITE_URL?: string },
   user: UserRecord,
   body: ContributionSubmitBody,
   siteOrigin: string
@@ -243,9 +244,7 @@ export async function assertOrganizerForEvent(
   user: UserRecord,
   event: EventRecord
 ): Promise<boolean> {
-  if (user.roles.includes("admin")) return true;
-  if (!user.roles.includes("organizer")) return false;
-  return user.organizationIds.includes(event.organizationId);
+  return userHasOrgOrganizerAccess(user, event.organizationId);
 }
 
 export async function handleContributionReview(

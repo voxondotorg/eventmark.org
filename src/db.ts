@@ -85,13 +85,13 @@ export interface EventRecord {
   registeredCount?: number;
   /** Set when an event is published; locks draft edits even after unpublish. */
   publishedOnce?: boolean;
-  /** True when a 150×150 banner image is stored for this event. */
+  /** True when a 300×300 banner image is stored for this event. */
   hasBanner?: boolean;
 }
 
-/** Draft events are editable only before the first publish. */
+/** Draft events are editable; published events must be moved back to draft first. */
 export function isEventEditable(ev: EventRecord): boolean {
-  return (ev.status ?? "published") === "draft" && !ev.publishedOnce;
+  return (ev.status ?? "published") === "draft";
 }
 
 export interface AgendaSlot {
@@ -127,6 +127,8 @@ export interface UserRecord {
   verified?: boolean;
   roles: UserRole[];
   organizationIds: string[];
+  /** Orgs where user may run door check-in without full organizer access. */
+  checkinOrganizationIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -139,8 +141,6 @@ export interface RegistrationRecord {
   createdAt: string;
   /** Short alphanumeric ticket emailed to attendee; absent on legacy rows. */
   ticketCode?: string;
-  /** Set when attendee is checked in at the door via QR scan. */
-  checkedInAt?: string | null;
 }
 
 export interface InterestRecord {
@@ -317,7 +317,7 @@ export function randomId(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function emailKey(email: string): string {
+export function emailKey(email: string): string {
   return email.trim().toLowerCase();
 }
 
@@ -1228,6 +1228,38 @@ export async function getLatestOrgRequestForUser(
 
 /* --- Settings (per-environment, KV-backed; one row per deployed worker) --- */
 
+export interface SocialLinksRecord {
+  x: string;
+  discord: string;
+  telegram: string;
+  linkedin: string;
+  facebook: string;
+}
+
+const SOCIAL_LINK_KEYS = ["x", "discord", "telegram", "linkedin", "facebook"] as const;
+
+/** Trim and keep only http(s) social profile URLs for site footer / admin settings. */
+export function normalizeSocialLinks(
+  links: Partial<SocialLinksRecord> | null | undefined
+): SocialLinksRecord {
+  const src = links && typeof links === "object" ? links : {};
+  const out = {} as SocialLinksRecord;
+  for (const key of SOCIAL_LINK_KEYS) {
+    const raw = String(src[key] ?? "").trim().slice(0, 500);
+    if (!raw) {
+      out[key] = "";
+      continue;
+    }
+    try {
+      const u = new URL(raw);
+      out[key] = u.protocol === "http:" || u.protocol === "https:" ? raw : "";
+    } catch {
+      out[key] = "";
+    }
+  }
+  return out;
+}
+
 export interface SettingsRecord {
   /** Comma-separated bootstrap admin emails. Overrides the wrangler `ADMIN_EMAILS` var when set. */
   adminEmails: string;
@@ -1237,6 +1269,8 @@ export interface SettingsRecord {
   pauseOrgRequests: boolean;
   /** When true, new native registrations are rejected at the API. */
   pauseRegistrations: boolean;
+  /** Official social profile links shown in the site footer. */
+  socialLinks: SocialLinksRecord;
   updatedAt: string;
   updatedBy: string;
 }
@@ -1246,6 +1280,7 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
   noticeBanner: "",
   pauseOrgRequests: false,
   pauseRegistrations: false,
+  socialLinks: normalizeSocialLinks({}),
   updatedAt: "",
   updatedBy: "",
 };
@@ -1253,14 +1288,28 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
 export async function getSettings(kv: KVNamespace): Promise<SettingsRecord> {
   const raw = await kv.get(SETTINGS_KEY, "json");
   if (!raw) return DEFAULT_SETTINGS;
-  return { ...DEFAULT_SETTINGS, ...(raw as Partial<SettingsRecord>) };
+  const partial = raw as Partial<SettingsRecord>;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...partial,
+    socialLinks: normalizeSocialLinks({
+      ...DEFAULT_SETTINGS.socialLinks,
+      ...partial.socialLinks,
+    }),
+  };
 }
 
 export async function saveSettings(
   kv: KVNamespace,
   next: SettingsRecord
 ): Promise<void> {
-  await kv.put(SETTINGS_KEY, JSON.stringify(next));
+  await kv.put(
+    SETTINGS_KEY,
+    JSON.stringify({
+      ...next,
+      socialLinks: normalizeSocialLinks(next.socialLinks),
+    })
+  );
 }
 
 /* --- Tickets --- */
@@ -1269,9 +1318,6 @@ export interface TicketIndexEntry {
   eventId: string;
   userId: string;
   registrationId: string;
-  /** Signed token embedded in the ticket QR code. */
-  ticketToken?: string | null;
-  checkedInAt?: string | null;
 }
 
 export async function deleteTicket(kv: KVNamespace, code: string): Promise<void> {

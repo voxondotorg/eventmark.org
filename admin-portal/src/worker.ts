@@ -15,6 +15,8 @@ import {
   countUsers as dbCountUsers,
   countOrganizations as dbCountOrganizations,
   listPendingOrgRequests,
+  normalizeSocialLinks,
+  type SettingsRecord,
   type UserRecord as MainUserRecord,
 } from "../../src/db.js";
 import { decideOrgRequest } from "../../src/org-requests.js";
@@ -95,14 +97,7 @@ export interface OrgRequestRecord {
   updatedAt: string;
 }
 
-export interface SettingsRecord {
-  adminEmails: string;
-  noticeBanner: string | null;
-  pauseOrgRequests: boolean;
-  pauseRegistrations: boolean;
-  updatedAt: string;
-  updatedBy: string;
-}
+export type { SettingsRecord } from "../../src/db.js";
 
 export interface AuditLog {
   id: string;
@@ -150,11 +145,12 @@ const ORG_REQUEST_PREFIX = "org_req:";
 const AUDIT_LOG_PREFIX = "audit:";
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
+import { assertSafeProductionConfig, isLocalDevFlag } from "../../src/env-guard.js";
+
 // ==================== HELPERS ====================
 
 function isLocalDev(env: Env): boolean {
-  const flag = (env.LOCAL_DEV || "").trim().toLowerCase();
-  return flag === "1" || flag === "true" || flag === "yes";
+  return isLocalDevFlag(env.LOCAL_DEV);
 }
 
 function emailKey(email: string): string {
@@ -439,6 +435,7 @@ async function saveSettings(kv: KVNamespace, settings: SettingsRecord): Promise<
   await dbSaveSettings(kv, {
     ...settings,
     noticeBanner: settings.noticeBanner ?? "",
+    socialLinks: normalizeSocialLinks(settings.socialLinks),
   });
 }
 
@@ -573,6 +570,7 @@ async function logAction(
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    assertSafeProductionConfig(env);
     const url = new URL(request.url);
     const pathname = url.pathname;
     const method = request.method.toUpperCase();
@@ -1039,7 +1037,18 @@ async function handleApi(request: Request, env: Env, pathname: string, method: s
       if (!body) return json({ error: "invalid_body" }, { status: 400 });
 
       const current = await getSettings(kv);
-      const updated: SettingsRecord = { ...current, ...body, updatedAt: nowIso(), updatedBy: auth.email };
+      const updated: SettingsRecord = {
+        ...current,
+        ...body,
+        noticeBanner:
+          typeof body.noticeBanner === "string" ? body.noticeBanner : current.noticeBanner,
+        socialLinks:
+          body.socialLinks && typeof body.socialLinks === "object"
+            ? normalizeSocialLinks({ ...current.socialLinks, ...body.socialLinks })
+            : current.socialLinks,
+        updatedAt: nowIso(),
+        updatedBy: auth.email,
+      };
 
       await saveSettings(kv, updated);
       await logAction(kv, auth, "settings_updated", "settings", "settings", "Site Settings", { changes: Object.keys(body) });
@@ -1066,7 +1075,7 @@ async function handleUi(_request: Request, env: Env, pathname: string, auth: Aut
   if (pathname.startsWith("/events/")) return html(renderEventDetailPage(title, user, pathname.split("/")[2]));
   if (pathname === "/org-requests" || pathname === "/org-requests/") return html(renderOrgRequestsPage(title, user));
   if (pathname === "/audit-logs" || pathname === "/audit-logs/") return html(renderAuditLogsPage(title, user));
-  if (pathname === "/settings" || pathname === "/settings/") return html(renderSettingsPage(title, user));
+  if (pathname === "/settings" || pathname === "/settings/") return html(renderSettingsPage(title, user, env));
 
   return html(renderNotFoundPage(title, user), { status: 404 });
 }
@@ -1250,9 +1259,10 @@ function renderAuditLogsPage(title: string, user: AuthContext): string {
   `, "audit-logs");
 }
 
-function renderSettingsPage(title: string, user: AuthContext): string {
+function renderSettingsPage(title: string, user: AuthContext, env: Env): string {
+  const publicSite = (env.PUBLIC_SITE_URL || "https://your-site.example.com").replace(/\/$/, "");
   return renderBaseHtml(title, user, `
-    <div class="page-header"><h2>Settings</h2><p>Configure site-wide settings</p></div>
+    <div class="page-header"><h2>Settings</h2><p>Configure site-wide settings for the public EventMark app</p></div>
     <form id="settings-form" class="settings-form">
       <div class="form-group">
         <label for="admin-emails">Admin Emails (comma-separated)</label>
@@ -1269,6 +1279,16 @@ function renderSettingsPage(title: string, user: AuthContext): string {
       <div class="form-group checkbox-group">
         <label><input type="checkbox" id="pause-registrations" name="pauseRegistrations"> Pause new event registrations</label>
       </div>
+      <div class="settings-section">
+        <h3>Footer social links</h3>
+        <p class="help-text">Set a URL to enable each icon in the public site footer. Leave blank to keep it disabled.</p>
+        <p class="help-text">Public read API: <code>${escapeHtml(publicSite)}/api/site/social-links</code></p>
+        <div class="form-group"><label for="social-x">X (Twitter)</label><input id="social-x" type="url" placeholder="https://x.com/eventmark" /></div>
+        <div class="form-group"><label for="social-discord">Discord</label><input id="social-discord" type="url" placeholder="https://discord.gg/…" /></div>
+        <div class="form-group"><label for="social-telegram">Telegram</label><input id="social-telegram" type="url" placeholder="https://t.me/…" /></div>
+        <div class="form-group"><label for="social-linkedin">LinkedIn</label><input id="social-linkedin" type="url" placeholder="https://linkedin.com/company/…" /></div>
+        <div class="form-group"><label for="social-facebook">Facebook</label><input id="social-facebook" type="url" placeholder="https://facebook.com/…" /></div>
+      </div>
       <div class="form-actions"><button type="submit" class="btn btn-primary">Save Settings</button></div>
     </form>
   `, "settings");
@@ -1276,7 +1296,15 @@ function renderSettingsPage(title: string, user: AuthContext): string {
 
 function renderNotFoundPage(title: string, user: AuthContext): string {
   return renderBaseHtml(title, user, `
-    <div class="error-page"><h1>404</h1><p>Page not found</p><a href="/" class="btn btn-secondary">Go to Dashboard</a></div>
+    <div class="error-page">
+      <h1>404</h1>
+      <p>Page not found</p>
+      <div class="action-buttons" style="justify-content:center;">
+        <a href="/" class="btn btn-primary">Dashboard</a>
+        <a href="/settings" class="btn btn-secondary">Settings</a>
+        <a href="/org-requests" class="btn btn-secondary">Org requests</a>
+      </div>
+    </div>
   `);
 }
 
@@ -1338,6 +1366,12 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; bac
 .checkbox-group label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .checkbox-group input { width: auto; }
 .settings-form { max-width: 600px; }
+.settings-section { margin: 2rem 0 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
+.settings-section h3 { margin-bottom: 0.75rem; font-size: 1.05rem; }
+.settings-section code { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); word-break: break-all; }
+.error-page { max-width: 420px; margin: 4rem auto; text-align: center; padding: 2rem; }
+.error-page h1 { font-size: 4rem; font-family: var(--font-mono); margin-bottom: 0.5rem; }
+.error-page p { color: var(--text-secondary); margin-bottom: 1.5rem; }
 .quick-actions { margin-bottom: 2rem; }
 .quick-actions h3 { margin-bottom: 1rem; }
 .action-buttons { display: flex; gap: 0.75rem; }
@@ -1750,6 +1784,12 @@ async function loadSettings() {
     document.getElementById('notice-banner').value = settings.noticeBanner || '';
     document.getElementById('pause-org-requests').checked = settings.pauseOrgRequests;
     document.getElementById('pause-registrations').checked = settings.pauseRegistrations;
+    const social = settings.socialLinks || {};
+    document.getElementById('social-x').value = social.x || '';
+    document.getElementById('social-discord').value = social.discord || '';
+    document.getElementById('social-telegram').value = social.telegram || '';
+    document.getElementById('social-linkedin').value = social.linkedin || '';
+    document.getElementById('social-facebook').value = social.facebook || '';
   } catch (e) { console.error('Failed to load settings:', e); }
 }
 
@@ -1761,6 +1801,13 @@ async function saveSettings(e) {
       noticeBanner: document.getElementById('notice-banner').value,
       pauseOrgRequests: document.getElementById('pause-org-requests').checked,
       pauseRegistrations: document.getElementById('pause-registrations').checked,
+      socialLinks: {
+        x: document.getElementById('social-x').value.trim(),
+        discord: document.getElementById('social-discord').value.trim(),
+        telegram: document.getElementById('social-telegram').value.trim(),
+        linkedin: document.getElementById('social-linkedin').value.trim(),
+        facebook: document.getElementById('social-facebook').value.trim(),
+      },
     };
     await api('/api/settings', { method: 'PUT', body: JSON.stringify(settings) });
     alert('Settings saved successfully');

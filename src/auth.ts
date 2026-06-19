@@ -17,6 +17,7 @@ import {
   setRateLimit,
   storeOtp,
 } from "./db.js";
+import { syncCheckinStaffForUser } from "./checkin-staff.js";
 
 const OTP_TTL_SECONDS = 300;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -490,6 +491,39 @@ export async function sendRegistrationEmail(
   await sendCodedEmail(env, to, subject, lines, "Registration");
 }
 
+/** Email sent to attendee after successful QR check-in at the door. */
+export async function sendCheckinConfirmationEmail(
+  env: AuthEnv,
+  to: string,
+  args: {
+    eventTitle: string;
+    eventStartsAt: string;
+    attendeeName?: string | null;
+    checkedInAt: string;
+    ticketCode?: string | null;
+  }
+): Promise<void> {
+  const greeting = args.attendeeName?.trim() ? `Hi ${args.attendeeName.trim()},` : "Hi,";
+  const subject = `Checked in: ${args.eventTitle}`;
+  const lines = [
+    greeting,
+    "",
+    `You are checked in for: ${args.eventTitle}`,
+    `When: ${args.eventStartsAt}`,
+    `Checked in at: ${args.checkedInAt}`,
+    args.ticketCode ? `Ticket: ${args.ticketCode}` : "",
+    "",
+    "Enjoy the event!",
+  ]
+    .filter(Boolean)
+    .join("\r\n");
+  if (env.EMAIL_LOG_ONLY === "1") {
+    console.log("[EventMark] Check-in email (log-only mode)", { to, subject });
+    return;
+  }
+  await sendCodedEmail(env, to, subject, lines, "Check-in");
+}
+
 /** Organizer-triggered invite/reminder/pass campaign email. */
 export async function sendEventCampaignEmail(
   env: AuthEnv,
@@ -689,11 +723,13 @@ export async function verifyOtpAndCreateSession(
       email: email.trim().toLowerCase(),
       roles: ["user"],
       organizationIds: [],
+      checkinOrganizationIds: [],
       createdAt: ts,
       updatedAt: ts,
     };
     await saveUser(env.KV, user);
   }
+  user = await syncCheckinStaffForUser(env.KV, user);
   const tokenBytes = new Uint8Array(32);
   crypto.getRandomValues(tokenBytes);
   const token = Array.from(tokenBytes, (b) => b.toString(16).padStart(2, "0")).join("");

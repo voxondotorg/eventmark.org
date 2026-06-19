@@ -14,6 +14,7 @@
     organizerReviewEventId: null,
     pendingBannerBlob: null,
     pendingBannerPreviewUrl: null,
+    eventSaveInFlight: false,
     flash: "",
     flashKind: "info",
     calendarMonth: new Date(),
@@ -144,7 +145,7 @@
     if (code === "missing_org") return "You are not part of an approved organization yet.";
     if (code === "org_not_approved") return "Your organization is not approved yet — wait for the EventMark admin decision.";
     if (code === "event_not_editable") {
-      return "This event can no longer be edited. Only drafts that have never been published can be changed.";
+      return "Published events cannot be edited directly. Move the event back to draft, make your changes, then publish again.";
     }
     if (code === "name_required" || code === "website_required" || code === "description_required" ||
         code === "activities_required" || code === "directors_required" || code === "modes_required" ||
@@ -1014,7 +1015,11 @@
     var logoutNav = $("#btn-logout-nav");
     if (logoutNav) logoutNav.classList.toggle("hidden", !loggedIn);
     Array.prototype.forEach.call(document.querySelectorAll(".nav-auth-only"), function (link) {
+      if (link.classList.contains("nav-checkin-desk-only")) return;
       link.classList.toggle("hidden", !loggedIn);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".nav-checkin-desk-only"), function (link) {
+      link.classList.toggle("hidden", !(loggedIn && userHasCheckinDeskAccess()));
     });
     var badge = $("#user-verified-badge");
     var profileBtn = $("#btn-profile");
@@ -1057,6 +1062,12 @@
 
   function userIsAdmin() {
     return !!(state.user && state.user.roles && state.user.roles.indexOf("admin") >= 0);
+  }
+
+  function userHasCheckinDeskAccess() {
+    if (!state.user) return false;
+    var ids = state.user.checkinOrganizationIds || [];
+    return ids.length > 0;
   }
 
   function loadConfig() {
@@ -1455,6 +1466,20 @@
       p = renderHome();
     } else if (parts[0] === "checkin") {
       p = renderCheckin();
+    } else if (parts[0] === "checkin-desk") {
+      if (!state.user) {
+        openLoginModal(function () {
+          window.location.hash = "#/checkin-desk";
+          route();
+        });
+        p = renderHome();
+      } else if (!userHasCheckinDeskAccess()) {
+        setFlash("Check-in desk access is assigned by an event organizer.", "info");
+        if (window.location.hash !== "#/") window.location.hash = "#/";
+        p = renderHome();
+      } else {
+        p = renderCheckinDesk();
+      }
     } else if (parts[0] === "about") {
       p = renderAbout();
     } else if (parts[0] === "hemw") {
@@ -1514,7 +1539,7 @@
   }
 
   function hasSuspiciousInput(s) {
-    return /(\b(union\s+select|select\s+.+\s+from|insert\s+into|delete\s+from|drop\s+table|update\s+.+\s+set|;\s*--|'\s*or\s+'1'\s*=\s*'1|'\s*or\s+1\s*=\s*1|exec\s+xp_|benchmark\s*\(|sleep\s*\()/i.test(String(s || ""));
+    return /\b(union\s+select|insert\s+into|delete\s+from|drop\s+table|update\s+.+\s+set|;\s*--|or\s+1\s*=\s*1|exec\s+xp_|benchmark\s*\(|sleep\s*\()/i.test(String(s || ""));
   }
 
   var SPAM_URL_HOSTS = {
@@ -1691,6 +1716,400 @@
       .catch(function () {
         var panel = $("#checkin-panel");
         if (panel) panel.innerHTML = "<p class='flash error'>Could not verify this ticket.</p>";
+      });
+  }
+
+  function renderCheckinDesk() {
+    var deskTs = { value: "" };
+    layout(
+      "<section class='card'>" +
+        "<h2>Check-in desk</h2>" +
+        "<p class='muted'>Select your organization and event, then scan ticket QR codes or paste a check-in token.</p>" +
+        "<div class='field'><label>Organization</label><select id='desk-org'><option value=''>Loading…</option></select></div>" +
+        "<div class='field'><label>Event</label><select id='desk-event'><option value=''>Select organization first</option></select></div>" +
+        "<div id='ts-desk'></div>" +
+        "<div class='field'><label>Check-in token</label><input id='desk-token' placeholder='Paste token or scan ticket QR' /></div>" +
+        "<button type='button' id='desk-checkin-btn' class='btn-primary'>Check in guest</button>" +
+        "<div id='desk-checkin-result' class='muted'></div>" +
+        "<div class='suite-scanner card'>" +
+        "<h4>Camera QR scanner</h4>" +
+        "<p class='muted'>Use your device camera to scan ticket or pass QR codes.</p>" +
+        "<div id='desk-scan-permission' class='muted'>Camera permission not requested yet.</div>" +
+        "<video id='desk-scan-video' playsinline muted autoplay></video>" +
+        "<canvas id='desk-scan-canvas' hidden aria-hidden='true'></canvas>" +
+        "<div class='row'>" +
+        "<button type='button' id='desk-scan-permission-btn' class='btn-ghost'>Allow camera access</button>" +
+        "<button type='button' id='desk-scan-start' class='btn-primary' disabled>Start scanner</button>" +
+        "<button type='button' id='desk-scan-stop' class='btn-ghost'>Stop camera</button>" +
+        "</div>" +
+        "<div id='desk-scan-status' class='muted'>Request camera permission to begin scanning.</div>" +
+        "</div>" +
+        "</section>"
+    );
+    renderTurnstile("ts-desk", deskTs, function () {});
+
+    var deskEventsById = {};
+    var deskScanner = {
+      stream: null,
+      timer: 0,
+      running: false,
+      busy: false,
+      detector: null,
+      canvas: null,
+      ctx: null,
+      lastToken: "",
+      lastTokenAt: 0,
+    };
+
+    function deskEventId() {
+      var sel = $("#desk-event");
+      return sel ? (sel.value || "") : "";
+    }
+
+    function deskSetScanStatus(msg) {
+      var node = $("#desk-scan-status");
+      if (node) node.textContent = msg;
+    }
+
+    function deskSetPermission(msg, kind) {
+      var node = $("#desk-scan-permission");
+      if (!node) return;
+      node.textContent = msg;
+      node.classList.remove("permission-granted", "permission-denied");
+      if (kind) node.classList.add(kind);
+    }
+
+    function deskSetScanButtons(hasPermission) {
+      var startBtn = $("#desk-scan-start");
+      var permBtn = $("#desk-scan-permission-btn");
+      if (startBtn) startBtn.disabled = !hasPermission;
+      if (permBtn) permBtn.textContent = hasPermission ? "Camera allowed" : "Allow camera access";
+    }
+
+    function deskEnsureJsQr() {
+      if (window.jsQR) return Promise.resolve(true);
+      return new Promise(function (resolve, reject) {
+        var existing = document.getElementById("jsqr-script");
+        if (existing) {
+          existing.addEventListener("load", function () {
+            resolve(!!window.jsQR);
+          });
+          existing.addEventListener("error", function () {
+            reject(new Error("jsqr_load_failed"));
+          });
+          return;
+        }
+        var s = document.createElement("script");
+        s.id = "jsqr-script";
+        s.src = "/assets/jsqr.js";
+        s.async = true;
+        s.onload = function () {
+          resolve(!!window.jsQR);
+        };
+        s.onerror = function () {
+          reject(new Error("jsqr_load_failed"));
+        };
+        document.head.appendChild(s);
+      });
+    }
+
+    function deskIsEventMarkHost(hostname) {
+      if (!hostname) return false;
+      var h = String(hostname).toLowerCase();
+      if (h === String(window.location.hostname || "").toLowerCase()) return true;
+      if (h === "eventmark.org" || h === "www.eventmark.org") return true;
+      if (h.slice(-13) === ".eventmark.org") return true;
+      if (h.indexOf("eventmark.randomflux.online") >= 0) return true;
+      return false;
+    }
+
+    function deskExtractCheckinToken(raw) {
+      var s = (raw || "").trim();
+      if (!s) return "";
+      if (s.indexOf("http://") === 0 || s.indexOf("https://") === 0) {
+        try {
+          var u = new URL(s);
+          if (!deskIsEventMarkHost(u.hostname)) return "";
+          var token = u.searchParams.get("token");
+          if (token) return token;
+          if (u.hash) {
+            var hashPart = u.hash.replace(/^#/, "");
+            var qIdx = hashPart.indexOf("?");
+            if (hashPart.split("?")[0].replace(/^\//, "") === "checkin" && qIdx >= 0) {
+              var params = new URLSearchParams(hashPart.slice(qIdx + 1));
+              token = params.get("token");
+              if (token) return token;
+            }
+          }
+        } catch (e) {
+          return "";
+        }
+        return "";
+      }
+      return s;
+    }
+
+    function deskRunCheckin(scannedToken, fromScanner) {
+      var eid = deskEventId();
+      var tokenInput = (scannedToken || ($("#desk-token").value || "")).trim();
+      if (!eid || !tokenInput) {
+        toast("Organization, event, and token are required.", "info");
+        return Promise.resolve();
+      }
+      if (!deskTs.value) {
+        toast("Complete the security check first.", "info");
+        return Promise.resolve();
+      }
+      return api("/api/checkin/scan", {
+        method: "POST",
+        body: JSON.stringify({ eventId: eid, token: tokenInput, turnstileToken: deskTs.value }),
+      })
+        .then(function (data) {
+          var node = $("#desk-checkin-result");
+          if (node) {
+            var guestName = "guest";
+            if (data && data.type === "ticket" && data.attendee) {
+              guestName = data.attendee.name || data.attendee.email || "guest";
+            } else if (data && data.invite) {
+              guestName = data.invite.name || data.invite.email || "guest";
+            }
+            node.innerHTML = "Checked in: <strong>" + escapeHtml(guestName) + "</strong>";
+          }
+          if (!fromScanner) toast("Check-in successful.", "success");
+        })
+        .catch(function (err) {
+          if (fromScanner && err && err.data && err.data.error === "already_checked_recently") return;
+          toast(friendlyError(err, "Check-in failed."), "error");
+        });
+    }
+
+    function deskHandleScannedToken(raw) {
+      if (!raw) return;
+      var token = deskExtractCheckinToken(raw);
+      if (!token) {
+        deskSetScanStatus("QR must link to EventMark check-in.");
+        return;
+      }
+      var now = Date.now();
+      if (deskScanner.lastToken === token && now - deskScanner.lastTokenAt < 1500) return;
+      deskScanner.lastToken = token;
+      deskScanner.lastTokenAt = now;
+      var tokenInput = $("#desk-token");
+      if (tokenInput) tokenInput.value = token;
+      deskSetScanStatus("Token scanned. Checking in…");
+      deskRunCheckin(token, true).then(function () {
+        deskSetScanStatus("Scan next QR code.");
+      });
+    }
+
+    function deskDetectFromVideo(video) {
+      if (deskScanner.detector) return deskScanner.detector.detect(video);
+      if (window.jsQR && deskScanner.canvas && deskScanner.ctx) {
+        if (video.readyState < video.HAVE_ENOUGH_DATA) return Promise.resolve([]);
+        var w = video.videoWidth;
+        var h = video.videoHeight;
+        if (!w || !h) return Promise.resolve([]);
+        deskScanner.canvas.width = w;
+        deskScanner.canvas.height = h;
+        deskScanner.ctx.drawImage(video, 0, 0, w, h);
+        var imageData = deskScanner.ctx.getImageData(0, 0, w, h);
+        var code = window.jsQR(imageData.data, imageData.width, imageData.height);
+        if (code && code.data) return Promise.resolve([{ rawValue: code.data }]);
+        return Promise.resolve([]);
+      }
+      return Promise.resolve([]);
+    }
+
+    function deskBeginScanLoop(video) {
+      deskScanner.running = true;
+      deskScanner.timer = setInterval(function () {
+        if (!deskScanner.running || deskScanner.busy || !video) return;
+        if (!deskScanner.detector && !window.jsQR) return;
+        deskScanner.busy = true;
+        deskDetectFromVideo(video)
+          .then(function (codes) {
+            if (!codes || !codes.length) return;
+            var raw = codes[0] && (codes[0].rawValue || "");
+            deskHandleScannedToken(raw);
+          })
+          .catch(function () {})
+          .finally(function () {
+            deskScanner.busy = false;
+          });
+      }, 250);
+    }
+
+    function deskStopCamera() {
+      deskScanner.running = false;
+      if (deskScanner.timer) {
+        clearInterval(deskScanner.timer);
+        deskScanner.timer = 0;
+      }
+      if (deskScanner.stream) {
+        deskScanner.stream.getTracks().forEach(function (t) {
+          t.stop();
+        });
+        deskScanner.stream = null;
+      }
+      var video = $("#desk-scan-video");
+      if (video) video.srcObject = null;
+      deskSetScanStatus("Camera stopped.");
+    }
+
+    function deskOpenCameraStream() {
+      var video = $("#desk-scan-video");
+      if (!video) return Promise.resolve();
+      var canvas = $("#desk-scan-canvas");
+      if (canvas) {
+        deskScanner.canvas = canvas;
+        deskScanner.ctx = canvas.getContext("2d", { willReadFrequently: true });
+      }
+      deskSetScanStatus("Starting camera…");
+      return navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: "environment" } })
+        .then(function (stream) {
+          deskSetPermission("Camera permission granted.", "permission-granted");
+          deskSetScanButtons(true);
+          deskScanner.stream = stream;
+          video.srcObject = stream;
+          return video.play().catch(function () {});
+        })
+        .then(function () {
+          deskSetScanStatus("Camera live. Point to QR code.");
+          deskBeginScanLoop(video);
+        });
+    }
+
+    function deskLoadEvents(orgId) {
+      var eventSel = $("#desk-event");
+      if (!eventSel) return Promise.resolve();
+      if (!orgId) {
+        eventSel.innerHTML = "<option value=''>Select organization first</option>";
+        return Promise.resolve();
+      }
+      eventSel.innerHTML = "<option value=''>Loading events…</option>";
+      return api("/api/checkin-desk/events?organizationId=" + encodeURIComponent(orgId))
+        .then(function (data) {
+          deskEventsById = {};
+          var items = (data && data.items) || [];
+          items.forEach(function (ev) {
+            deskEventsById[ev.id] = ev;
+          });
+          if (!items.length) {
+            eventSel.innerHTML = "<option value=''>No published events</option>";
+            return;
+          }
+          eventSel.innerHTML =
+            "<option value=''>Select event</option>" +
+            items
+              .map(function (ev) {
+                return (
+                  "<option value='" +
+                  escapeHtml(ev.id) +
+                  "'>" +
+                  escapeHtml(ev.title || "Event") +
+                  "</option>"
+                );
+              })
+              .join("");
+        })
+        .catch(function () {
+          eventSel.innerHTML = "<option value=''>Could not load events</option>";
+        });
+    }
+
+    var checkinBtn = $("#desk-checkin-btn");
+    if (checkinBtn) {
+      checkinBtn.addEventListener("click", function () {
+        deskRunCheckin();
+      });
+    }
+
+    var orgSel = $("#desk-org");
+    if (orgSel) {
+      orgSel.addEventListener("change", function () {
+        deskLoadEvents(orgSel.value || "");
+      });
+    }
+
+    var permBtn = $("#desk-scan-permission-btn");
+    if (permBtn) {
+      permBtn.addEventListener("click", function () {
+        deskEnsureJsQr()
+          .then(function () {
+            return deskOpenCameraStream();
+          })
+          .catch(function (err) {
+            deskSetPermission("Could not access camera.", "permission-denied");
+            deskSetScanStatus(err && err.message ? err.message : "Camera error.");
+          });
+      });
+    }
+
+    var startBtn = $("#desk-scan-start");
+    if (startBtn) {
+      startBtn.addEventListener("click", function () {
+        deskEnsureJsQr()
+          .then(function () {
+            if (deskScanner.stream) {
+              deskBeginScanLoop($("#desk-scan-video"));
+              deskSetScanStatus("Scanner running.");
+              return;
+            }
+            return deskOpenCameraStream();
+          })
+          .catch(function () {
+            toast("Could not start scanner.", "error");
+          });
+      });
+    }
+
+    var stopBtn = $("#desk-scan-stop");
+    if (stopBtn) {
+      stopBtn.addEventListener("click", function () {
+        deskStopCamera();
+      });
+    }
+
+    if (window.BarcodeDetector) {
+      try {
+        deskScanner.detector = new BarcodeDetector({ formats: ["qr_code"] });
+      } catch (e) {
+        deskScanner.detector = null;
+      }
+    }
+
+    return api("/api/me/checkin-organizations")
+      .then(function (data) {
+        var items = (data && data.items) || [];
+        if (!orgSel) return;
+        if (!items.length) {
+          orgSel.innerHTML = "<option value=''>No check-in access assigned</option>";
+          return;
+        }
+        orgSel.innerHTML =
+          items.length > 1
+            ? "<option value=''>Select organization</option>" +
+              items
+                .map(function (o) {
+                  return (
+                    "<option value='" + escapeHtml(o.id) + "'>" + escapeHtml(o.name || "Organization") + "</option>"
+                  );
+                })
+                .join("")
+            : items
+                .map(function (o) {
+                  return (
+                    "<option value='" + escapeHtml(o.id) + "' selected>" +
+                    escapeHtml(o.name || "Organization") +
+                    "</option>"
+                  );
+                })
+                .join("");
+        if (items.length === 1) deskLoadEvents(items[0].id);
+      })
+      .catch(function () {
+        if (orgSel) orgSel.innerHTML = "<option value=''>Could not load organizations</option>";
       });
   }
 
@@ -3648,6 +4067,7 @@
         "<button type='button' class='dash-tab active' data-org-ws-tab='create' role='tab' aria-selected='true'>Create Event (Draft)</button>" +
         "<button type='button' class='dash-tab' data-org-ws-tab='events' role='tab' aria-selected='false'>Your Events</button>" +
         "<button type='button' class='dash-tab' data-org-ws-tab='suite' role='tab' aria-selected='false'>Invitation Suite</button>" +
+        "<button type='button' class='dash-tab' data-org-ws-tab='checkin-staff' role='tab' aria-selected='false'>Check-in staff</button>" +
         "<button type='button' class='dash-tab' data-org-ws-tab='contributors' role='tab' aria-selected='false'>Contributor requests</button>" +
         "</div>" +
         "<div class='dashboard-panels'>" +
@@ -3786,6 +4206,14 @@
         "</div>" +
         "</div>" +
         "</section>" +
+        "<section class='card dashboard-tab-panel' data-org-ws-panel='checkin-staff'><h3>Check-in staff</h3>" +
+        "<p class='muted'>Assign door check-in access by email. Staff sign in with OTP and use the Check-in desk in the header — no full organizer access required.</p>" +
+        "<div class='field'><label>Organization</label><select id='staff-org'>" + orgOptions + "</select></div>" +
+        "<div class='field'><label>Staff email</label><input id='staff-email' type='email' placeholder='staff@example.com' autocomplete='email' /></div>" +
+        "<div id='ts-staff'></div>" +
+        "<button type='button' id='staff-add' class='btn-primary'>Assign check-in access</button>" +
+        "<div id='staff-list' class='muted'>Loading…</div>" +
+        "</section>" +
         "<section class='card dashboard-tab-panel' data-org-ws-panel='contributors'><h3>Contributor requests</h3>" +
         "<p class='muted'>Select an event to view and manage contributor requests.</p>" +
         "<div id='rev-event-list'></div>" +
@@ -3815,6 +4243,7 @@
     }
     var token = { value: "" };
     var suiteToken = { value: "" };
+    var staffToken = { value: "" };
     var editingEventId = null;
     var editingEventForForm = null;
     renderTurnstile("ts-event", token, function (ready) {
@@ -3822,6 +4251,115 @@
       if (b) b.disabled = !ready;
     });
     renderTurnstile("ts-suite", suiteToken, function () {});
+    renderTurnstile("ts-staff", staffToken, function () {});
+
+    function staffOrgId() {
+      var sel = $("#staff-org");
+      return sel ? (sel.value || "") : "";
+    }
+
+    function loadCheckinStaffList() {
+      var orgId = staffOrgId();
+      var node = $("#staff-list");
+      if (!node) return Promise.resolve();
+      if (!orgId) {
+        node.textContent = "Select an organization.";
+        return Promise.resolve();
+      }
+      node.textContent = "Loading…";
+      return api("/api/organizations/" + encodeURIComponent(orgId) + "/checkin-staff")
+        .then(function (data) {
+          var items = (data && data.items) || [];
+          if (!items.length) {
+            node.innerHTML = "<p>No check-in staff assigned yet.</p>";
+            return;
+          }
+          node.innerHTML =
+            "<ul class='staff-list'>" +
+            items
+              .map(function (s) {
+                return (
+                  "<li class='row staff-row'>" +
+                  "<span>" +
+                  escapeHtml(s.email) +
+                  "</span>" +
+                  "<button type='button' class='btn-ghost btn-small' data-staff-remove='" +
+                  escapeHtml(s.id) +
+                  "'>Remove</button>" +
+                  "</li>"
+                );
+              })
+              .join("") +
+            "</ul>";
+        })
+        .catch(function () {
+          node.textContent = "Could not load check-in staff.";
+        });
+    }
+
+    var staffOrgSel = $("#staff-org");
+    if (staffOrgSel) {
+      staffOrgSel.addEventListener("change", function () {
+        loadCheckinStaffList();
+      });
+    }
+
+    var staffListNode = $("#staff-list");
+    if (staffListNode) {
+      staffListNode.addEventListener("click", function (e) {
+        var t = e.target;
+        if (!(t instanceof HTMLElement)) return;
+        var staffId = t.getAttribute("data-staff-remove");
+        if (!staffId) return;
+        var orgId = staffOrgId();
+        if (!orgId) return;
+        api("/api/organizations/" + encodeURIComponent(orgId) + "/checkin-staff/" + encodeURIComponent(staffId), {
+          method: "DELETE",
+        })
+          .then(function () {
+            toast("Check-in access removed.", "success");
+            loadCheckinStaffList();
+          })
+          .catch(function (err) {
+            toast(friendlyError(err, "Could not remove staff."), "error");
+          });
+      });
+    }
+
+    var staffAddBtn = $("#staff-add");
+    if (staffAddBtn) {
+      staffAddBtn.addEventListener("click", function () {
+        var orgId = staffOrgId();
+        var emailInput = $("#staff-email");
+        var email = emailInput ? (emailInput.value || "").trim() : "";
+        if (!orgId || !email) {
+          toast("Organization and email are required.", "info");
+          return;
+        }
+        if (!staffToken.value) {
+          toast("Complete the security check first.", "info");
+          return;
+        }
+        staffAddBtn.disabled = true;
+        api("/api/organizations/" + encodeURIComponent(orgId) + "/checkin-staff", {
+          method: "POST",
+          body: JSON.stringify({ email: email, turnstileToken: staffToken.value }),
+        })
+          .then(function () {
+            toast("Check-in access assigned.", "success");
+            if (emailInput) emailInput.value = "";
+            loadCheckinStaffList();
+          })
+          .catch(function (err) {
+            toast(friendlyError(err, "Could not assign check-in access."), "error");
+          })
+          .finally(function () {
+            staffAddBtn.disabled = false;
+          });
+      });
+    }
+
+    loadCheckinStaffList();
 
     var suiteEventsById = {};
     var countrySelect = wireCountrySelect();
@@ -4736,7 +5274,7 @@
       var createBtn = $("#ev-create");
       var cancelBtn = $("#ev-cancel-edit");
       if (mode === "edit") {
-        if (heading) heading.textContent = "Edit draft event";
+        if (heading) heading.textContent = "Edit event (draft)";
         if (createBtn) createBtn.textContent = "Save changes";
         if (cancelBtn) cancelBtn.style.display = "";
       } else {
@@ -4786,7 +5324,7 @@
 
     function openEventEditor(ev) {
       if (!isOrganizerEventEditable(ev)) {
-        toast("This event can no longer be edited.", "error");
+        toast("Move this event back to draft before editing.", "error");
         return;
       }
       editingEventId = ev.id;
@@ -4834,6 +5372,7 @@
     showExistingBannerPreview({});
 
     $("#ev-create").addEventListener("click", function () {
+      if (state.eventSaveInFlight) return;
       var b = $("#ev-create");
       ["ev-title", "ev-desc", "ev-start", "ev-end", "ev-exturl", "ev-online", "ev-web", "ev-min", "ev-max", "ev-country-input"].forEach(clearFieldError);
       var orgId = $("#ev-org").value;
@@ -4968,42 +5507,59 @@
         turnstileToken: token.value,
       };
       var isEdit = !!editingEventId;
+      state.eventSaveInFlight = true;
       beginButtonLoading(b, isEdit ? "Saving changes…" : "Saving draft…");
       return api(isEdit ? "/api/events/" + encodeURIComponent(editingEventId) : "/api/events", {
         method: isEdit ? "PUT" : "POST",
         body: JSON.stringify(isEdit ? payload : Object.assign({ status: "draft" }, payload)),
       })
         .then(function (data) {
-          var eventId = isEdit ? editingEventId : (data && data.event && data.event.id);
+          var savedEvent = data && data.event ? data.event : null;
+          var eventId = isEdit ? editingEventId : (savedEvent && savedEvent.id);
           var bannerBlob = state.pendingBannerBlob;
           if (eventId && bannerBlob) {
             if (b && document.body.contains(b)) {
               b.textContent = "Uploading banner…";
             }
             return uploadEventBanner(eventId, bannerBlob)
-              .then(function () {
-                return { eventId: eventId, uploadedBanner: true };
+              .then(function (bannerData) {
+                var updated = bannerData && bannerData.event ? bannerData.event : savedEvent;
+                return { eventId: eventId, uploadedBanner: true, savedEvent: updated || savedEvent };
               });
           }
-          return { eventId: eventId, uploadedBanner: false };
+          return { eventId: eventId, uploadedBanner: false, savedEvent: savedEvent };
         })
         .then(function (result) {
+          if (!isEdit && result.eventId) {
+            editingEventId = result.eventId;
+            state.organizerEventId = result.eventId;
+            setEventFormMode("edit");
+          }
+          if (result.savedEvent) {
+            editingEventForForm = result.savedEvent;
+          }
+          clearPendingBannerPreview();
+          if (editingEventForForm && editingEventForForm.hasBanner) {
+            showExistingBannerPreview(editingEventForForm);
+          }
+          resetTurnstileWidget(token, "ts-event", function (ready) {
+            if (b) b.disabled = !ready;
+          });
           toast(
             isEdit
               ? (result.uploadedBanner ? "Draft and banner updated." : "Draft updated.")
               : (result.uploadedBanner
-                ? "Saved as draft with banner. Publish from the list when ready."
-                : "Saved as draft. Publish it from the list below when ready."),
+                ? "Draft saved with banner. You can keep editing or publish from Your Events."
+                : "Draft saved. You can keep editing or publish from Your Events."),
             "success"
           );
-          clearEventForm();
-          setEventFormMode("create");
           loadOrganizerEvents();
         })
         .catch(function (err) {
           toast(friendlyError(err, "Could not save the event."), "error");
         })
         .finally(function () {
+          state.eventSaveInFlight = false;
           if (b && document.body.contains(b)) endButtonLoading(b, { disabled: false });
         });
     });
@@ -5202,7 +5758,7 @@
   }
 
   function isOrganizerEventEditable(ev) {
-    return ev.status === "draft" && !ev.publishedOnce;
+    return (ev.status || "draft") === "draft";
   }
 
   function addSpeakerRow(speaker) {
@@ -5242,10 +5798,12 @@
           .map(function (ev) {
             var status = ev.status || "draft";
             var editable = isOrganizerEventEditable(ev);
-            var lockedNote =
-              status === "draft" && ev.publishedOnce
-                ? "<p class='muted'>This event was published before and can no longer be edited.</p>"
-                : "";
+            var draftHint =
+              status === "published"
+                ? "<p class='muted'>Move back to draft to edit, then publish again when ready.</p>"
+                : ev.publishedOnce
+                  ? "<p class='muted'>Previously published — edit this draft and publish again when ready.</p>"
+                  : "";
             var eventUrl = window.location.origin + "/#/event/" + encodeURIComponent(ev.id);
             var shareX =
               "https://x.com/intent/tweet?text=" +
@@ -5264,13 +5822,13 @@
                 ? "<button type='button' class='btn-ghost' data-unpublish='" + escapeHtml(ev.id) + "'>Move back to draft</button>"
                 : "<button type='button' class='btn-primary' data-publish='" + escapeHtml(ev.id) + "'>Publish</button>";
             var editBtn = editable
-              ? "<button type='button' class='btn-ghost' data-edit='" + escapeHtml(ev.id) + "'>Edit draft</button>"
+              ? "<button type='button' class='btn-ghost' data-edit='" + escapeHtml(ev.id) + "'>Edit</button>"
               : "";
             return (
               "<article class='card'><h4>" + escapeHtml(ev.title) + "</h4>" +
               "<div>" + pill + "</div>" +
               "<p class='muted'>" + escapeHtml(formatEventWhen(ev.startsAt, ev.endsAt)) + "</p>" +
-              lockedNote +
+              draftHint +
               (ev.website_url && isHttpUrl(ev.website_url)
                 ? "<p><a class='btn-ghost' href='" + escapeHtml(ev.website_url) + "' target='_blank' rel='noopener'>Official website</a></p>"
                 : "") +
@@ -5883,6 +6441,20 @@
     if (navOverlay) {
       navOverlay.addEventListener("click", closeMobileNav);
     }
+
+    // Ensure hash routes run even when clicking the current page link (e.g. Discover on home).
+    document.querySelectorAll("#main-nav a[href^='#']").forEach(function (link) {
+      link.addEventListener("click", function (e) {
+        var href = link.getAttribute("href") || "#/";
+        var target = href.replace(/^#/, "") || "/";
+        var current = (window.location.hash || "#/").replace(/^#/, "") || "/";
+        if (target === current) {
+          e.preventDefault();
+          route();
+          closeMobileNav();
+        }
+      });
+    });
 
     // Close mobile nav when clicking a nav link
     var navLinks = document.querySelectorAll("#main-nav a, #main-nav button");

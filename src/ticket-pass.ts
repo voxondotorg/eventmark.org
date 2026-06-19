@@ -1,22 +1,21 @@
 import { getRegistration, getUserById, saveRegistration, type TicketIndexEntry } from "./db.js";
 import { getTicket, saveTicket } from "./db.js";
 import { nowIso } from "./db.js";
+import { isLocalDevFlag } from "./env-guard.js";
 
 const TICKET_SPENT_PREFIX = "ticket_spent:";
 
 export function ticketPassSecretFromEnv(env: {
   INVITE_PASS_SECRET?: string;
-  TURNSTILE_SECRET_KEY?: string;
   LOCAL_DEV?: string;
   ENVIRONMENT?: string;
 }): string {
-  const secret = (env.INVITE_PASS_SECRET || env.TURNSTILE_SECRET_KEY || "").trim();
-  if (!secret) {
-    const flag = (env.LOCAL_DEV || "").trim().toLowerCase();
-    const localDev = flag === "1" || flag === "true" || flag === "yes";
-    if (!localDev) throw new Error("INVITE_PASS_SECRET is not configured");
-  }
-  return secret || "eventmark-invite-local-only";
+  const secret = (env.INVITE_PASS_SECRET || "").trim();
+  if (secret) return secret;
+  if (isLocalDevFlag(env.LOCAL_DEV)) return "eventmark-invite-local-only";
+  throw new Error(
+    "INVITE_PASS_SECRET is not configured. Set it via: wrangler secret put INVITE_PASS_SECRET"
+  );
 }
 
 function b64url(bytes: Uint8Array): string {
