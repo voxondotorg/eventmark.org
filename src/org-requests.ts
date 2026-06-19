@@ -30,6 +30,12 @@ import {
   saveOrgRequest,
   saveUser,
 } from "./db.js";
+import {
+  isSafeHttpUrl,
+  sanitizeText,
+  validateOrgTextField,
+  wordCount,
+} from "./input-validation.js";
 
 export const ORG_ACTIVITY_LABELS = [
   "serving_people",
@@ -176,31 +182,26 @@ export async function notifyOrgRequestResubmitted(
 }
 
 function isValidUrl(s: string): boolean {
-  try {
-    const u = new URL(s);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
+  return isSafeHttpUrl(s);
 }
 
 function sanitizeStr(s: unknown, max = 2000): string {
-  return String(s ?? "").trim().slice(0, max);
+  return sanitizeText(s, max);
 }
 
-function wordCount(s: string): number {
-  const t = String(s || "").trim();
-  if (!t) return 0;
-  return t.split(/\s+/).filter(Boolean).length;
-}
+export { wordCount };
 
 export const ORG_DESCRIPTION_MIN_WORDS = 160;
 
 function validateBody(body: OrgRequestSubmitBody): string | null {
   if (!sanitizeStr(body.organizationName, 200)) return "name_required";
+  const orgNameErr = validateOrgTextField(body.organizationName, 200, true);
+  if (orgNameErr) return orgNameErr;
   if (!isValidUrl(body.website)) return "website_invalid";
   const description = sanitizeStr(body.description, 4000);
   if (!description) return "description_required";
+  const descErr = validateOrgTextField(description, 4000);
+  if (descErr) return descErr;
   if (wordCount(description) < ORG_DESCRIPTION_MIN_WORDS) return "description_min_words";
   if (!Array.isArray(body.activities) || body.activities.length === 0) {
     return "activities_required";
@@ -213,9 +214,13 @@ function validateBody(body: OrgRequestSubmitBody): string | null {
   }
   for (const d of body.directors) {
     if (!sanitizeStr(d?.name, 200) || !isValidUrl(d?.url ?? "")) return "directors_invalid";
+    const directorErr = validateOrgTextField(d?.name, 200);
+    if (directorErr) return directorErr;
   }
   if (!["in_person", "online", "hybrid"].includes(body.eventMode)) return "event_mode_invalid";
   if (!sanitizeStr(body.motto, 500)) return "motto_required";
+  const mottoErr = validateOrgTextField(body.motto, 500, true);
+  if (mottoErr) return mottoErr;
   if (typeof body.voxonAffiliated !== "boolean") return "voxon_invalid";
   return null;
 }

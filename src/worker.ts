@@ -128,6 +128,7 @@ import type {
   SpeakerSummary,
 } from "./db.js";
 import { validateBannerImage } from "./banner-image.js";
+import { validateEventBody, isSafeHttpUrl } from "./input-validation.js";
 import { applySecurityHeaders, securityProfileFor } from "./security-headers.js";
 import {
   addBooth,
@@ -220,16 +221,6 @@ function sitePublicUrl(env: Env, requestUrl: URL): string {
 
 function invitePassSecret(env: Env): string {
   return ticketPassSecretFromEnv(env);
-}
-
-function isHttpUrl(value: string | null | undefined): boolean {
-  if (!value) return false;
-  try {
-    const u = new URL(String(value));
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 function eventShareLinks(
@@ -581,15 +572,8 @@ async function handleApi(
     const nextBio = typeof body.bio === "string" ? body.bio.trim() : user.bio || "";
     const nextWebsite = typeof body.website === "string" ? body.website.trim() : user.website || "";
     if (!nextName) return json({ error: "name_required" }, { status: 400 });
-    if (nextWebsite) {
-      try {
-        const u = new URL(nextWebsite);
-        if (u.protocol !== "http:" && u.protocol !== "https:") {
-          return json({ error: "invalid_url" }, { status: 400 });
-        }
-      } catch {
-        return json({ error: "invalid_url" }, { status: 400 });
-      }
+    if (nextWebsite && !isSafeHttpUrl(nextWebsite)) {
+      return json({ error: "invalid_url" }, { status: 400 });
     }
     const updated: UserRecord = {
       ...user,
@@ -616,15 +600,8 @@ async function handleApi(
     const nextBio = typeof body?.bio === "string" ? body.bio.trim() : user.bio || "";
     const nextWebsite = typeof body?.website === "string" ? body.website.trim() : user.website || "";
     if (!nextName) return json({ error: "name_required" }, { status: 400 });
-    if (nextWebsite) {
-      try {
-        const u = new URL(nextWebsite);
-        if (u.protocol !== "http:" && u.protocol !== "https:") {
-          return json({ error: "invalid_url" }, { status: 400 });
-        }
-      } catch {
-        return json({ error: "invalid_url" }, { status: 400 });
-      }
+    if (nextWebsite && !isSafeHttpUrl(nextWebsite)) {
+      return json({ error: "invalid_url" }, { status: 400 });
     }
     const updated: UserRecord = {
       ...user,
@@ -1586,47 +1563,55 @@ async function handleApi(
     if (org.vettingStatus !== "APPROVED" && !u.roles.includes("admin")) {
       return json({ error: "org_not_approved" }, { status: 403 });
     }
-    const id = randomId();
-    const ts = nowIso();
     const isExternal = Boolean(body.is_external);
     const mode: EventMode =
       body.mode === "online" || body.mode === "hybrid" || body.mode === "in_person"
         ? body.mode
         : "in_person";
-    if (body.website_url && !isHttpUrl(body.website_url)) {
-      return json({ error: "invalid_url" }, { status: 400 });
+    const validated = validateEventBody(
+      {
+        title: body.title,
+        description: body.description,
+        location: body.location,
+        startsAt: body.startsAt,
+        endsAt: body.endsAt,
+        online_url: body.online_url,
+        website_url: body.website_url,
+        external_url: body.external_url,
+        min_seats: body.min_seats,
+        max_seats: body.max_seats,
+        speakers: body.speakers,
+        is_external: isExternal,
+        mode,
+      },
+      { requireCore: true }
+    );
+    if (!validated.ok) {
+      return json({ error: validated.error, message: validated.message }, { status: 400 });
     }
-    const minSeats = Math.max(0, Math.floor(Number(body.min_seats ?? 0)) || 0);
-    const maxSeats = Math.max(0, Math.floor(Number(body.max_seats ?? 0)) || 0);
-    const speakers: SpeakerSummary[] = Array.isArray(body.speakers)
-      ? body.speakers.slice(0, 50).map((s) => ({
-          name: String(s?.name ?? "").trim().slice(0, 200),
-          link: String(s?.link ?? "").trim().slice(0, 500),
-          org: String(s?.org ?? "").trim().slice(0, 200),
-          orgLink: String(s?.orgLink ?? "").trim().slice(0, 500),
-        }))
-      : [];
+    const id = randomId();
+    const ts = nowIso();
     const status: EventStatus = body.status === "published" ? "published" : "draft";
     const event: EventRecord = {
       id,
-      title: body.title,
-      description: body.description ?? "",
-      location: body.location ?? "",
-      startsAt: body.startsAt,
-      endsAt: body.endsAt,
+      title: validated.sanitized.title,
+      description: validated.sanitized.description,
+      location: validated.sanitized.location,
+      startsAt: validated.sanitized.startsAt,
+      endsAt: validated.sanitized.endsAt,
       organizationId: org.id,
       is_external: isExternal,
-      external_url: isExternal ? body.external_url ?? null : null,
+      external_url: validated.sanitized.external_url,
       createdAt: ts,
       updatedAt: ts,
       agenda: [],
       status,
       mode,
-      online_url: mode !== "in_person" ? body.online_url ?? null : null,
-      website_url: body.website_url ? String(body.website_url).trim() : null,
-      min_seats: minSeats,
-      max_seats: maxSeats,
-      speakers,
+      online_url: validated.sanitized.online_url,
+      website_url: validated.sanitized.website_url,
+      min_seats: validated.sanitized.min_seats,
+      max_seats: validated.sanitized.max_seats,
+      speakers: validated.sanitized.speakers,
     };
     await saveEvent(env.KV, event);
     return json({ event });
@@ -1677,9 +1662,6 @@ async function handleApi(
     if (!isEventEditable(existing)) {
       return json({ error: "event_not_editable" }, { status: 403 });
     }
-    const turnstileToken = request.headers.get("X-Turnstile-Token") || "";
-    const okTs = await requireTurnstile(env, request, turnstileToken);
-    if (!okTs) return json({ error: "turnstile_failed" }, { status: 400 });
     const bytes = new Uint8Array(await request.arrayBuffer());
     const validated = validateBannerImage(bytes);
     if (!validated.ok) return json({ error: validated.error }, { status: 400 });
@@ -1726,57 +1708,57 @@ async function handleApi(
       turnstileToken?: string;
     }>(request);
     if (!body) return json({ error: "invalid_body" }, { status: 400 });
-    if (body.website_url != null && body.website_url !== "" && !isHttpUrl(body.website_url)) {
-      return json({ error: "invalid_url" }, { status: 400 });
-    }
     const okTs = await requireTurnstile(env, request, body.turnstileToken);
     if (!okTs) return json({ error: "turnstile_failed" }, { status: 400 });
     const mode: EventMode =
       body.mode === "online" || body.mode === "hybrid" || body.mode === "in_person"
         ? body.mode
         : existing.mode ?? "in_person";
-    const minSeats =
-      body.min_seats === undefined
-        ? existing.min_seats ?? 0
-        : Math.max(0, Math.floor(Number(body.min_seats)) || 0);
-    const maxSeats =
-      body.max_seats === undefined
-        ? existing.max_seats ?? 0
-        : Math.max(0, Math.floor(Number(body.max_seats)) || 0);
-    const speakers: SpeakerSummary[] | undefined = Array.isArray(body.speakers)
-      ? body.speakers.slice(0, 50).map((s) => ({
-          name: String(s?.name ?? "").trim().slice(0, 200),
-          link: String(s?.link ?? "").trim().slice(0, 500),
-          org: String(s?.org ?? "").trim().slice(0, 200),
-          orgLink: String(s?.orgLink ?? "").trim().slice(0, 500),
-        }))
-      : undefined;
+    const isExternal = body.is_external ?? existing.is_external;
+    const validated = validateEventBody(
+      {
+        title: body.title ?? existing.title,
+        description: body.description ?? existing.description,
+        location: body.location ?? existing.location,
+        startsAt: body.startsAt ?? existing.startsAt,
+        endsAt: body.endsAt ?? existing.endsAt,
+        online_url:
+          body.online_url === undefined ? existing.online_url ?? null : body.online_url,
+        website_url:
+          body.website_url === undefined ? existing.website_url ?? null : body.website_url,
+        external_url:
+          body.external_url === undefined ? existing.external_url ?? null : body.external_url,
+        min_seats: body.min_seats === undefined ? existing.min_seats ?? 0 : body.min_seats,
+        max_seats: body.max_seats === undefined ? existing.max_seats ?? 0 : body.max_seats,
+        speakers: body.speakers ?? existing.speakers ?? [],
+        is_external: isExternal,
+        mode,
+      },
+      { requireCore: true }
+    );
+    if (!validated.ok) {
+      return json({ error: validated.error, message: validated.message }, { status: 400 });
+    }
     const category: EventCategory | undefined =
       body.category === "open_source" || body.category === "fun_source" || body.category === "hybrid"
         ? body.category
         : undefined;
-    const isExternal = body.is_external ?? existing.is_external;
     const prevStart = existing.startsAt;
     const next: EventRecord = {
       ...existing,
-      title: body.title ?? existing.title,
-      description: body.description ?? existing.description,
-      location: body.location ?? existing.location,
-      startsAt: body.startsAt ?? existing.startsAt,
-      endsAt: body.endsAt ?? existing.endsAt,
+      title: validated.sanitized.title,
+      description: validated.sanitized.description,
+      location: validated.sanitized.location,
+      startsAt: validated.sanitized.startsAt,
+      endsAt: validated.sanitized.endsAt,
       is_external: isExternal,
-      external_url: isExternal ? body.external_url ?? existing.external_url : null,
+      external_url: validated.sanitized.external_url,
       mode,
-      online_url: mode !== "in_person" ? body.online_url ?? existing.online_url ?? null : null,
-      website_url:
-        body.website_url === undefined
-          ? existing.website_url ?? null
-          : body.website_url
-            ? String(body.website_url).trim()
-            : null,
-      min_seats: minSeats,
-      max_seats: maxSeats,
-      speakers: speakers ?? existing.speakers ?? [],
+      online_url: validated.sanitized.online_url,
+      website_url: validated.sanitized.website_url,
+      min_seats: validated.sanitized.min_seats,
+      max_seats: validated.sanitized.max_seats,
+      speakers: validated.sanitized.speakers,
       category: category ?? existing.category,
       status: "draft",
       updatedAt: nowIso(),

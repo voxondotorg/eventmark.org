@@ -85,7 +85,7 @@ export interface EventRecord {
   registeredCount?: number;
   /** Set when an event is published; locks draft edits even after unpublish. */
   publishedOnce?: boolean;
-  /** True when a 300×300 banner image is stored for this event. */
+  /** True when a 150×150 banner image is stored for this event. */
   hasBanner?: boolean;
 }
 

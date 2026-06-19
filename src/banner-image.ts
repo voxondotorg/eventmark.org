@@ -1,7 +1,7 @@
-/** Validate optimized event banner uploads (300×300 WebP or JPEG). */
+/** Validate optimized event banner uploads (150×150 WebP or JPEG). */
 
-export const BANNER_SIZE = 300;
-export const MAX_BANNER_BYTES = 150_000;
+export const BANNER_SIZE = 150;
+export const MAX_BANNER_BYTES = 80_000;
 
 export function jpegDimensions(data: Uint8Array): { w: number; h: number } | null {
   let i = 2;

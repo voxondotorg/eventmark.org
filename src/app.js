@@ -92,6 +92,7 @@
   function friendlyError(err, fallback) {
     var d = err && err.data ? err.data : null;
     var code = d && d.error;
+    if (d && d.message) return d.message;
     if (code === "turnstile_failed") {
       var base =
         "We could not finish the security check. Refresh the page, complete it again, and try once more.";
@@ -112,9 +113,18 @@
       }
       return emailMsg;
     }
-    if (code === "invalid_dimensions") return "Banner must be exactly 300×300 pixels after optimization.";
+    if (code === "invalid_dimensions") return "Banner must be exactly 150×150 pixels after optimization.";
     if (code === "banner_too_large") return "Banner file is too large. Try a simpler image.";
     if (code === "invalid_format") return "Banner must be a JPEG or WebP image.";
+    if (code === "title_too_long") return "Event title must be 26 characters or fewer.";
+    if (code === "description_too_long") return "Description must be 500 words or fewer.";
+    if (code === "emoji_not_allowed") return "Emojis are not allowed in this field.";
+    if (code === "invalid_input") return "Input contains disallowed characters or patterns.";
+    if (code === "end_before_start") return "End date/time must be after the start.";
+    if (code === "seats_invalid") return "Seat counts must be zero or positive, and minimum cannot exceed maximum.";
+    if (code === "speaker_name_too_long") return "Speaker names must be 26 characters or fewer.";
+    if (code === "online_url_required") return "Online events need a link participants can join.";
+    if (code === "external_url_required") return "Add the link where attendees register.";
     if (code === "invalid_code" || code === "invalid_otp") {
       return "That code is incorrect or has expired. Request a new code.";
     }
@@ -144,7 +154,7 @@
     if (code === "description_min_words") {
       return "Description must be at least " + ORG_DESCRIPTION_MIN_WORDS + " words.";
     }
-    if (code === "invalid_url") return "That website link is not a valid URL.";
+    if (code === "invalid_url") return "That link is not allowed. Use a full http(s) URL from your own site — shorteners and suspicious links are blocked.";
     if (code === "invalid_director_link") return "One of the director links is not a valid URL.";
     if (code === "not_info_requested") return "This contribution is not waiting for more information.";
     if (code === "already_pending") return "Your verification request is already pending review.";
@@ -434,7 +444,7 @@
     return (
       '<img class="' + className + '" src="' + escapeHtml(eventBannerUrl(ev)) + '" alt="' +
       escapeHtml((ev.title || "Event") + " banner") +
-      '" width="300" height="300" loading="lazy" />'
+      '" width="' + BANNER_PX + '" height="' + BANNER_PX + '" loading="lazy" />'
     );
   }
 
@@ -452,7 +462,7 @@
             reject(new Error("Could not optimize image."));
             return;
           }
-          if (blob.size <= 120000 || i === qualities.length - 1) {
+          if (blob.size <= 60000 || i === qualities.length - 1) {
             resolve(blob);
             return;
           }
@@ -482,18 +492,18 @@
         URL.revokeObjectURL(url);
         var w = img.naturalWidth;
         var h = img.naturalHeight;
-        if (w < 300 || h < 300) {
-          reject(new Error("Image must be at least 300×300 pixels."));
+        if (w < 50 || h < 50) {
+          reject(new Error("Image is too small. Use at least 50×50 pixels."));
           return;
         }
         var side = Math.min(w, h);
         var sx = Math.floor((w - side) / 2);
         var sy = Math.floor((h - side) / 2);
         var canvas = document.createElement("canvas");
-        canvas.width = 300;
-        canvas.height = 300;
+        canvas.width = BANNER_PX;
+        canvas.height = BANNER_PX;
         var ctx = canvas.getContext("2d");
-        ctx.drawImage(img, sx, sy, side, side, 0, 0, 300, 300);
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, BANNER_PX, BANNER_PX);
         encodeBannerBlob(canvas, resolve, reject);
       };
       img.onerror = function () {
@@ -1486,6 +1496,64 @@
     } catch (e) {
       return false;
     }
+  }
+
+  var EVENT_TITLE_MAX = 26;
+  var PERSON_NAME_MAX = 26;
+  var EVENT_DESCRIPTION_MAX_WORDS = 500;
+  var BANNER_PX = 150;
+
+  function countWords(s) {
+    var t = String(s || "").trim();
+    if (!t) return 0;
+    return t.split(/\s+/).filter(Boolean).length;
+  }
+
+  function containsEmoji(s) {
+    return /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}]/u.test(String(s || ""));
+  }
+
+  function hasSuspiciousInput(s) {
+    return /(\b(union\s+select|select\s+.+\s+from|insert\s+into|delete\s+from|drop\s+table|update\s+.+\s+set|;\s*--|'\s*or\s+'1'\s*=\s*'1|'\s*or\s+1\s*=\s*1|exec\s+xp_|benchmark\s*\(|sleep\s*\()/i.test(String(s || ""));
+  }
+
+  var SPAM_URL_HOSTS = {
+    "bit.ly": true,
+    "tinyurl.com": true,
+    "t.co": true,
+    "goo.gl": true,
+    "ow.ly": true,
+    "adf.ly": true,
+    "is.gd": true,
+    "buff.ly": true,
+    "cutt.ly": true,
+    "rb.gy": true,
+  };
+
+  function isSafeHttpUrl(value) {
+    if (!isHttpUrl(value)) return false;
+    try {
+      var u = new URL(String(value).trim());
+      if (u.username || u.password) return false;
+      if (SPAM_URL_HOSTS[u.hostname.toLowerCase()]) return false;
+      if (String(value).indexOf("@") >= 0) return false;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function rejectUnsafeText(value) {
+    if (hasSuspiciousInput(value)) return "Input contains disallowed characters or patterns.";
+    if (containsEmoji(value)) return "Emojis are not allowed.";
+    return "";
+  }
+
+  function syncEventEndMin() {
+    var startEl = $("#ev-start");
+    var endEl = $("#ev-end");
+    if (!startEl || !endEl) return;
+    endEl.min = startEl.value || "";
   }
 
   function beginButtonLoading(btn, loadingText) {
@@ -2708,7 +2776,7 @@
         '<figure class="event-detail-banner">' +
           '<img src="' + escapeHtml(eventBannerUrl(ev)) + '" alt="' +
           escapeHtml((ev.title || "Event") + " banner") +
-          '" width="300" height="300" />' +
+          '" width="' + BANNER_PX + '" height="' + BANNER_PX + '" />' +
         "</figure>" +
         "<h2>" +
           escapeHtml(ev.title) +
@@ -3048,12 +3116,29 @@
 
       var hasError = false;
       if (!name) { setFieldError("of-name", "Required."); hasError = true; }
+      else if (rejectUnsafeText(name)) { setFieldError("of-name", rejectUnsafeText(name)); hasError = true; }
       if (!web) { setFieldError("of-web", "Required — paste your public website URL."); hasError = true; }
+      else if (!isSafeHttpUrl(web)) {
+        setFieldError("of-web", "Use a valid http(s) URL from your own site. Short links are not allowed.");
+        hasError = true;
+      }
       if (!desc) { setFieldError("of-desc", "Required — describe what you do."); hasError = true; }
+      else if (rejectUnsafeText(desc)) { setFieldError("of-desc", rejectUnsafeText(desc)); hasError = true; }
       if (!motto) { setFieldError("of-motto", "Required — even a short tagline helps."); hasError = true; }
+      else if (rejectUnsafeText(motto)) { setFieldError("of-motto", rejectUnsafeText(motto)); hasError = true; }
       if (activities.length === 0) { toast("Pick at least one activity.", "info"); hasError = true; }
       if (modes.length === 0) { toast("Tell us if your events are in-person, online, or both.", "info"); hasError = true; }
       if (directors.length === 0) { toast("Add at least one director with a name and a link.", "info"); hasError = true; }
+      directors.forEach(function (d, idx) {
+        if (rejectUnsafeText(d.name)) {
+          toast("Director name " + (idx + 1) + ": " + rejectUnsafeText(d.name), "info");
+          hasError = true;
+        }
+        if (!isSafeHttpUrl(d.link)) {
+          toast("Director link " + (idx + 1) + " must be a valid http(s) URL.", "info");
+          hasError = true;
+        }
+      });
       if (hasError) return;
       if (!token.value) { toast("Finish the security check first.", "info"); return; }
 
@@ -3313,8 +3398,20 @@
       var words = countWords(desc);
       var hasError = false;
       if (!name) { setFieldError("of-name", "Required."); hasError = true; }
+      else {
+        var nameUnsafe = rejectUnsafeText(name);
+        if (nameUnsafe) { setFieldError("of-name", nameUnsafe); hasError = true; }
+      }
       if (!web) { setFieldError("of-web", "Required — paste your public website URL."); hasError = true; }
+      else if (!isSafeHttpUrl(web)) {
+        setFieldError("of-web", "Use a valid http(s) URL from your own site. Short links are not allowed.");
+        hasError = true;
+      }
       if (!desc) { setFieldError("of-desc", "Required — describe what you do."); hasError = true; }
+      else {
+        var descUnsafe = rejectUnsafeText(desc);
+        if (descUnsafe) { setFieldError("of-desc", descUnsafe); hasError = true; }
+      }
       if (words < ORG_DESCRIPTION_MIN_WORDS) { setFieldError("of-desc", "Minimum " + ORG_DESCRIPTION_MIN_WORDS + " words is required."); hasError = true; }
       return !hasError;
     }
@@ -3324,6 +3421,18 @@
       if (directors.length === 0) {
         toast("Add at least one member with name and profile link.", "info");
         return false;
+      }
+      var i;
+      for (i = 0; i < directors.length; i++) {
+        var d = directors[i];
+        if (rejectUnsafeText(d.name)) {
+          toast("Director name " + (i + 1) + ": " + rejectUnsafeText(d.name), "info");
+          return false;
+        }
+        if (!isSafeHttpUrl(d.link)) {
+          toast("Director link " + (i + 1) + " must be a valid http(s) URL.", "info");
+          return false;
+        }
       }
       var verifiedCount = directors.filter(function (d) { return d.verified; }).length;
       if (verifiedCount < 1) {
@@ -3346,6 +3455,7 @@
       if (activities.length === 0) { toast("Pick at least one activity.", "info"); ok = false; }
       if (modes.length === 0) { toast("Tell us if your events are in-person, online, or both.", "info"); ok = false; }
       if (!motto) { setFieldError("of-motto", "Required — this helps reviewers understand your event model."); ok = false; }
+      else if (rejectUnsafeText(motto)) { setFieldError("of-motto", rejectUnsafeText(motto)); ok = false; }
       return ok;
     }
 
@@ -3447,13 +3557,30 @@
       var voxonAffiliated = voxonRadio ? voxonRadio.value === "yes" : false;
       var hasError = false;
       if (!name) { setFieldError("of-name", "Required."); hasError = true; }
+      else if (rejectUnsafeText(name)) { setFieldError("of-name", rejectUnsafeText(name)); hasError = true; }
       if (!web) { setFieldError("of-web", "Required — paste your public website URL."); hasError = true; }
+      else if (!isSafeHttpUrl(web)) {
+        setFieldError("of-web", "Use a valid http(s) URL from your own site. Short links are not allowed.");
+        hasError = true;
+      }
       if (!desc) { setFieldError("of-desc", "Required — describe what you do."); hasError = true; }
+      else if (rejectUnsafeText(desc)) { setFieldError("of-desc", rejectUnsafeText(desc)); hasError = true; }
       if (countWords(desc) < ORG_DESCRIPTION_MIN_WORDS) { setFieldError("of-desc", "Minimum " + ORG_DESCRIPTION_MIN_WORDS + " words is required."); hasError = true; }
       if (!motto) { setFieldError("of-motto", "Required — even a short tagline helps."); hasError = true; }
+      else if (rejectUnsafeText(motto)) { setFieldError("of-motto", rejectUnsafeText(motto)); hasError = true; }
       if (activities.length === 0) { toast("Pick at least one activity.", "info"); hasError = true; }
       if (modes.length === 0) { toast("Tell us if your events are in-person, online, or both.", "info"); hasError = true; }
       if (directors.length === 0) { toast("Add at least one director with a name and a link.", "info"); hasError = true; }
+      directors.forEach(function (d, idx) {
+        if (rejectUnsafeText(d.name)) {
+          toast("Director name " + (idx + 1) + ": " + rejectUnsafeText(d.name), "info");
+          hasError = true;
+        }
+        if (!isSafeHttpUrl(d.link)) {
+          toast("Director link " + (idx + 1) + " must be a valid http(s) URL.", "info");
+          hasError = true;
+        }
+      });
       if (directors.filter(function (d) { return d.verified; }).length < 1) {
         toast("Add at least one verified member before submitting.", "info");
         hasError = true;
@@ -3526,15 +3653,15 @@
         "<div class='dashboard-panels'>" +
         "<section class='card dashboard-tab-panel active' data-org-ws-panel='create'><h3 id='ev-form-heading'>Create event (draft)</h3>" +
         "<div class='field'><label>Organization</label><select id='ev-org'>" + orgOptions + "</select></div>" +
-        "<div class='field'><label>Title</label><input id='ev-title' /></div>" +
-        "<div class='field'><label for='ev-banner'>Event banner (300×300 square)</label>" +
+        "<div class='field'><label for='ev-title'>Title</label><input id='ev-title' maxlength='26' /><small class='muted'>Maximum 26 characters.</small></div>" +
+        "<div class='field'><label for='ev-banner'>Event banner (150×150 square, max)</label>" +
         "<input type='file' id='ev-banner' accept='image/jpeg,image/png,image/webp,image/gif' />" +
         "<div id='ev-banner-preview-wrap' class='ev-banner-preview-wrap hidden'>" +
-        "<img id='ev-banner-preview' class='ev-banner-preview-img' alt='Banner preview' width='300' height='300' />" +
+        "<img id='ev-banner-preview' class='ev-banner-preview-img' alt='Banner preview' width='150' height='150' />" +
         "<button type='button' id='ev-banner-clear' class='btn-ghost btn-small'>Remove</button>" +
         "</div>" +
-        "<small class='muted'>Square images work best. We center-crop, resize to 300 x 300 pixels, and optimize automatically.</small></div>" +
-        "<div class='field'><label>Description</label><textarea id='ev-desc' rows='3'></textarea></div>" +
+        "<small class='muted'>Square images work best. We center-crop, resize to 150×150 pixels max, and optimize automatically.</small></div>" +
+        "<div class='field'><label for='ev-desc'>Description</label><textarea id='ev-desc' rows='3'></textarea><small id='ev-desc-meta' class='muted'>0 / 500 words max. Emojis not allowed.</small></div>" +
         "<div class='field'><label for='ev-loc'>City / venue</label><input id='ev-loc' placeholder='City, venue, or campus' /></div>" +
         "<div class='field' id='ev-country-field'>" +
         "<label for='ev-country-input'>Country</label>" +
@@ -3554,13 +3681,15 @@
         "<div class='field'><label>Online link (only for online / hybrid)</label><input id='ev-online' placeholder='https://meet.example.com/…' /></div>" +
         "<div class='field'><label>Official event website (optional)</label><input id='ev-web' placeholder='https://event.example.com' /></div>" +
         "<div class='row'>" +
-        "<div class='field'><label>Starts</label><input type='datetime-local' id='ev-start' /></div>" +
-        "<div class='field'><label>Ends</label><input type='datetime-local' id='ev-end' /></div>" +
+        "<div class='field'><label for='ev-start'>Starts</label><input type='datetime-local' id='ev-start' /></div>" +
+        "<div class='field'><label for='ev-end'>Ends</label><input type='datetime-local' id='ev-end' /></div>" +
         "</div>" +
+        "<small class='muted'>Use the calendar and time picker, or type date/time manually (end must be after start).</small>" +
         "<div class='row'>" +
-        "<div class='field'><label>Min seats</label><input id='ev-min' type='number' min='0' value='0' /></div>" +
-        "<div class='field'><label>Max seats (0 = unlimited)</label><input id='ev-max' type='number' min='0' value='0' /></div>" +
+        "<div class='field'><label for='ev-min'>Min seats</label><input id='ev-min' type='number' min='0' step='1' value='0' /></div>" +
+        "<div class='field'><label for='ev-max'>Max seats (0 = unlimited)</label><input id='ev-max' type='number' min='0' step='1' value='0' /></div>" +
         "</div>" +
+        "<small class='muted'>Seat counts cannot be negative.</small>" +
         "<fieldset class='field'><legend>Speakers</legend>" +
         "<p class='muted'>Optional — add speaker names with their professional / association link.</p>" +
         "<div id='ev-speakers'></div>" +
@@ -3701,6 +3830,23 @@
       radio.addEventListener("change", syncEventCountryFieldVisibility);
     });
     syncEventCountryFieldVisibility();
+
+    var evStartInput = $("#ev-start");
+    var evEndInput = $("#ev-end");
+    if (evStartInput) {
+      evStartInput.addEventListener("change", syncEventEndMin);
+      evStartInput.addEventListener("input", syncEventEndMin);
+    }
+    if (evEndInput) {
+      evEndInput.addEventListener("change", syncEventEndMin);
+    }
+    var evDescInput = $("#ev-desc");
+    var evDescMeta = $("#ev-desc-meta");
+    if (evDescInput && evDescMeta) {
+      evDescInput.addEventListener("input", function () {
+        evDescMeta.textContent = String(countWords(evDescInput.value || "")) + " / " + EVENT_DESCRIPTION_MAX_WORDS + " words max. Emojis not allowed.";
+      });
+    }
 
     function suiteEventId() {
       var sel = $("#suite-event");
@@ -4562,11 +4708,14 @@
       clearPendingBannerPreview();
       showExistingBannerPreview({});
       $("#ev-desc").value = "";
+      var evDescMetaClear = $("#ev-desc-meta");
+      if (evDescMetaClear) evDescMetaClear.textContent = "0 / " + EVENT_DESCRIPTION_MAX_WORDS + " words max. Emojis not allowed.";
       $("#ev-loc").value = "";
       if (countrySelect) countrySelect.clear();
       syncEventCountryFieldVisibility();
       $("#ev-start").value = "";
       $("#ev-end").value = "";
+      syncEventEndMin();
       $("#ev-online").value = "";
       $("#ev-web").value = "";
       $("#ev-min").value = "0";
@@ -4605,12 +4754,17 @@
       if (orgSel && ev.organizationId) orgSel.value = ev.organizationId;
       $("#ev-title").value = ev.title || "";
       $("#ev-desc").value = ev.description || "";
+      var evDescMetaPop = $("#ev-desc-meta");
+      if (evDescMetaPop) {
+        evDescMetaPop.textContent = String(countWords(ev.description || "")) + " / " + EVENT_DESCRIPTION_MAX_WORDS + " words max. Emojis not allowed.";
+      }
       var parsedLoc = parseEventLocation(ev.location || "");
       $("#ev-loc").value = parsedLoc.city;
       if (countrySelect) countrySelect.set(parsedLoc.country);
       syncEventCountryFieldVisibility();
       $("#ev-start").value = isoToDatetimeLocal(ev.startsAt);
       $("#ev-end").value = isoToDatetimeLocal(ev.endsAt);
+      syncEventEndMin();
       var mode = ev.mode || "in_person";
       var modeRadio = document.querySelector("input[name='ev-mode'][value='" + mode + "']");
       if (modeRadio) modeRadio.checked = true;
@@ -4661,7 +4815,7 @@
         optimizeEventBannerFile(file)
           .then(function (blob) {
             showPendingBannerPreview(blob);
-            toast("Banner optimized to 300×300.", "success");
+            toast("Banner optimized to 150×150.", "success");
           })
           .catch(function (err) {
             evBannerInput.value = "";
@@ -4681,9 +4835,10 @@
 
     $("#ev-create").addEventListener("click", function () {
       var b = $("#ev-create");
-      ["ev-title", "ev-start", "ev-end", "ev-exturl", "ev-online", "ev-web", "ev-min", "ev-max", "ev-country-input"].forEach(clearFieldError);
+      ["ev-title", "ev-desc", "ev-start", "ev-end", "ev-exturl", "ev-online", "ev-web", "ev-min", "ev-max", "ev-country-input"].forEach(clearFieldError);
       var orgId = $("#ev-org").value;
       var title = ($("#ev-title").value || "").trim();
+      var description = ($("#ev-desc").value || "").trim();
       // Convert datetime-local to ISO format
       var startsAtLocal = ($("#ev-start").value || "").trim();
       var endsAtLocal = ($("#ev-end").value || "").trim();
@@ -4692,12 +4847,27 @@
       var categoryRadio = document.querySelector("input[name='ev-category']:checked");
       var category = categoryRadio ? categoryRadio.value : "hybrid";
       var ext = $("#ev-ext").checked;
-      var minSeats = parseInt($("#ev-min").value || "0", 10) || 0;
-      var maxSeats = parseInt($("#ev-max").value || "0", 10) || 0;
+      var minSeatsRaw = parseInt($("#ev-min").value || "0", 10);
+      var maxSeatsRaw = parseInt($("#ev-max").value || "0", 10);
+      var minSeats = Number.isFinite(minSeatsRaw) ? minSeatsRaw : 0;
+      var maxSeats = Number.isFinite(maxSeatsRaw) ? maxSeatsRaw : 0;
       var onlineUrl = ($("#ev-online").value || "").trim();
       var websiteUrl = ($("#ev-web").value || "").trim();
+      var externalUrl = ($("#ev-exturl").value || "").trim();
       var hasError = false;
       if (!title) { setFieldError("ev-title", "Title is required."); hasError = true; }
+      else if (title.length > EVENT_TITLE_MAX) { setFieldError("ev-title", "Maximum 26 characters allowed."); hasError = true; }
+      else {
+        var titleUnsafe = rejectUnsafeText(title);
+        if (titleUnsafe) { setFieldError("ev-title", titleUnsafe); hasError = true; }
+      }
+      if (countWords(description) > EVENT_DESCRIPTION_MAX_WORDS) {
+        setFieldError("ev-desc", "Maximum 500 words allowed.");
+        hasError = true;
+      } else {
+        var descUnsafe = rejectUnsafeText(description);
+        if (descUnsafe) { setFieldError("ev-desc", descUnsafe); hasError = true; }
+      }
       if (!startsAtLocal) { setFieldError("ev-start", "Start date and time are required."); hasError = true; }
       if (!endsAtLocal) { setFieldError("ev-end", "End date and time are required."); hasError = true; }
       // Convert local datetime to ISO format
@@ -4705,18 +4875,30 @@
       var endsAt = endsAtLocal ? new Date(endsAtLocal).toISOString() : "";
       if (startsAtLocal && isNaN(Date.parse(startsAt))) { setFieldError("ev-start", "Invalid start date."); hasError = true; }
       if (endsAtLocal && isNaN(Date.parse(endsAt))) { setFieldError("ev-end", "Invalid end date."); hasError = true; }
+      if (startsAtLocal && endsAtLocal && !isNaN(Date.parse(startsAt)) && !isNaN(Date.parse(endsAt)) && Date.parse(endsAt) <= Date.parse(startsAt)) {
+        setFieldError("ev-end", "End must be after the start date and time.");
+        hasError = true;
+      }
       if ((mode === "online" || mode === "hybrid") && !onlineUrl) {
         setFieldError("ev-online", "Online events need a link participants can join.");
         hasError = true;
-      }
-      if (websiteUrl && !isHttpUrl(websiteUrl)) {
-        setFieldError("ev-web", "Use a valid website URL starting with http:// or https://");
+      } else if (onlineUrl && !isSafeHttpUrl(onlineUrl)) {
+        setFieldError("ev-online", "Use a valid http(s) URL from your own site. Short links are not allowed.");
         hasError = true;
       }
-      if (ext && !($("#ev-exturl").value || "").trim()) {
+      if (websiteUrl && !isSafeHttpUrl(websiteUrl)) {
+        setFieldError("ev-web", "Use a valid http(s) URL from your own site. Short links are not allowed.");
+        hasError = true;
+      }
+      if (ext && !externalUrl) {
         setFieldError("ev-exturl", "Add the link where attendees register.");
         hasError = true;
+      } else if (ext && externalUrl && !isSafeHttpUrl(externalUrl)) {
+        setFieldError("ev-exturl", "Use a valid http(s) registration URL. Short links are not allowed.");
+        hasError = true;
       }
+      if (minSeats < 0) { setFieldError("ev-min", "Minimum seats cannot be negative."); hasError = true; }
+      if (maxSeats < 0) { setFieldError("ev-max", "Maximum seats cannot be negative."); hasError = true; }
       if (maxSeats > 0 && minSeats > maxSeats) {
         setFieldError("ev-min", "Min seats cannot be greater than max.");
         hasError = true;
@@ -4732,8 +4914,6 @@
           hasError = true;
         }
       }
-      if (hasError) return;
-      if (!token.value) { toast("Finish the security check first.", "info"); return; }
       var speakers = Array.prototype.slice
         .call(document.querySelectorAll("#ev-speakers .speaker-row"))
         .map(function (row) {
@@ -4745,10 +4925,34 @@
           };
         })
         .filter(function (s) { return s.name; });
+      speakers.forEach(function (speaker, idx) {
+        if (speaker.name.length > PERSON_NAME_MAX) {
+          hasError = true;
+          toast("Speaker name " + (idx + 1) + " must be 26 characters or fewer.", "info");
+        }
+        var speakerUnsafe = rejectUnsafeText(speaker.name);
+        if (speakerUnsafe) {
+          hasError = true;
+          toast("Speaker name " + (idx + 1) + ": " + speakerUnsafe, "info");
+        }
+        if (speaker.link && !isSafeHttpUrl(speaker.link)) {
+          hasError = true;
+          toast("Speaker link " + (idx + 1) + " must be a valid http(s) URL.", "info");
+        }
+        if (speaker.org) {
+          var orgUnsafe = rejectUnsafeText(speaker.org);
+          if (orgUnsafe) {
+            hasError = true;
+            toast("Speaker association " + (idx + 1) + ": " + orgUnsafe, "info");
+          }
+        }
+      });
+      if (hasError) return;
+      if (!token.value) { toast("Finish the security check first.", "info"); return; }
       var payload = {
         organizationId: orgId,
         title: title,
-        description: $("#ev-desc").value,
+        description: description,
         location: buildEventLocation(cityLoc, countryNameMatches(countryLoc) || countryLoc, mode),
         startsAt: startsAt,
         endsAt: endsAt,
@@ -4760,7 +4964,7 @@
         max_seats: maxSeats,
         speakers: speakers,
         is_external: ext,
-        external_url: ext ? $("#ev-exturl").value : null,
+        external_url: ext ? externalUrl : null,
         turnstileToken: token.value,
       };
       var isEdit = !!editingEventId;
@@ -4776,12 +4980,7 @@
             if (b && document.body.contains(b)) {
               b.textContent = "Uploading banner…";
             }
-            return refreshTurnstileToken(token, "ts-event", function (ready) {
-              if (b) b.disabled = !ready;
-            })
-              .then(function (freshToken) {
-                return uploadEventBanner(eventId, bannerBlob, freshToken);
-              })
+            return uploadEventBanner(eventId, bannerBlob)
               .then(function () {
                 return { eventId: eventId, uploadedBanner: true };
               });
@@ -5012,7 +5211,7 @@
     var row = document.createElement("div");
     row.className = "speaker-row";
     row.innerHTML =
-      "<div class='field'><label>Name</label><input class='sp-name' /></div>" +
+      "<div class='field'><label>Name</label><input class='sp-name' maxlength='26' /><small class='muted'>Maximum 26 characters.</small></div>" +
       "<div class='field'><label>Professional / website link</label><input class='sp-link' placeholder='https://…' /></div>" +
       "<div class='field'><label>Association (optional)</label><input class='sp-assoc' placeholder='Company, university, group…' /></div>" +
       "<div class='row'><button type='button' class='btn-ghost' data-remove-speaker='1'>Remove</button></div>";
