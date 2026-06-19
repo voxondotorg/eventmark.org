@@ -1412,15 +1412,13 @@
   }
 
   function route() {
-    var hash = window.location.hash || "#/";
-    var path = hash.replace(/^#/, "") || "/";
-    var parts = path.split("/").filter(Boolean);
+    var parts = hashSectionParts();
     var section = parts[0] || "";
     if (section !== "dashboard" && section !== "organize") {
       closeModal();
     }
     var p;
-    if (parts[0] === "event" && parts[1]) {
+    if (section === "event" && parts[1]) {
       if (parts[2] === "contribute" && parts[3]) {
         p = renderEventDetail(parts[1]).then(function () {
           openContributionResubmit(parts[1], parts[3]);
@@ -1428,7 +1426,7 @@
       } else {
         p = renderEventDetail(parts[1]);
       }
-    } else if (parts[0] === "dashboard") {
+    } else if (section === "dashboard") {
       if (!state.user) {
         openLoginModal(function () {
           window.location.hash = "#/dashboard";
@@ -1450,7 +1448,7 @@
           }
         });
       }
-    } else if (parts[0] === "organize") {
+    } else if (section === "organize") {
       if (!state.user) {
         openLoginModal(function () {
           window.location.hash = "#/organize";
@@ -1460,13 +1458,13 @@
       } else {
         p = renderOrganize();
       }
-    } else if (parts[0] === "admin" || parts[0] === "vetting") {
+    } else if (section === "admin" || section === "vetting") {
       setFlash("Admin pages are behind Zero Trust and are not exposed in this public app.", "info");
       if (window.location.hash !== "#/") window.location.hash = "#/";
       p = renderHome();
-    } else if (parts[0] === "checkin") {
+    } else if (section === "checkin") {
       p = renderCheckin();
-    } else if (parts[0] === "checkin-desk") {
+    } else if (section === "checkin-desk") {
       if (!state.user) {
         openLoginModal(function () {
           window.location.hash = "#/checkin-desk";
@@ -1480,9 +1478,14 @@
       } else {
         p = renderCheckinDesk();
       }
-    } else if (parts[0] === "about") {
-      p = renderAbout();
-    } else if (parts[0] === "hemw") {
+    } else if (section === "about") {
+      if ($("#about-guide-nav")) {
+        mountAboutGuide(parseHashQuery().guide || "overview");
+        p = Promise.resolve();
+      } else {
+        p = renderAbout();
+      }
+    } else if (section === "hemw") {
       p = renderHemw();
     } else {
       p = renderHome();
@@ -1609,25 +1612,70 @@
     }
   }
 
+  function hashSectionParts() {
+    var hash = window.location.hash || "#/";
+    var path = hash.replace(/^#/, "").split("?")[0] || "/";
+    return path.split("/").filter(Boolean);
+  }
+
+  function syncAboutGuideHash(tab) {
+    var next = "#/about?guide=" + encodeURIComponent(tab || "overview");
+    if (window.location.hash === next) return;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", next);
+    } else {
+      window.location.hash = next;
+    }
+  }
+
+  function aboutGuideLink(tab, label) {
+    return "<a href='#/about?guide=" + encodeURIComponent(tab) + "'>" + escapeHtml(label) + "</a>";
+  }
+
+  function mountAboutGuide(initialTab) {
+    var valid = { overview: true, attend: true, events: true, organizers: true, checkin: true };
+    var key = valid[initialTab] ? initialTab : "overview";
+
+    function activate(next, syncUrl) {
+      if (!valid[next]) next = "overview";
+      key = next;
+      var nav = $("#about-guide-nav");
+      if (nav) {
+        Array.prototype.forEach.call(nav.querySelectorAll("[data-about-guide-tab]"), function (btn) {
+          var active = btn.getAttribute("data-about-guide-tab") === next;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+      }
+      Array.prototype.forEach.call(document.querySelectorAll("[data-about-guide-panel]"), function (panel) {
+        panel.classList.toggle("active", panel.getAttribute("data-about-guide-panel") === next);
+      });
+      if (syncUrl !== false) syncAboutGuideHash(next);
+    }
+
+    var nav = $("#about-guide-nav");
+    if (nav && !nav.dataset.guideBound) {
+      nav.dataset.guideBound = "1";
+      nav.addEventListener("click", function (e) {
+        var t = e.target;
+        if (!(t instanceof HTMLElement)) return;
+        var btn = t.closest("[data-about-guide-tab]");
+        if (!btn) return;
+        e.preventDefault();
+        activate(btn.getAttribute("data-about-guide-tab") || "overview", false);
+        syncAboutGuideHash(key);
+      });
+    }
+    activate(key, true);
+  }
+
   function renderHemw() {
-    var html =
-      "<h2>HEMW: How EventMark works</h2>" +
-      "<p class='muted'>Two journeys side-by-side — what you do as a guest, and how an organizer goes from idea to a published event with tickets.</p>" +
-      "<h3>If you are looking for events</h3>" +
-      "<ol class='hemw-steps'>" +
-      "<li><strong>Find an event</strong> — browse the home page, open the Calendar, or subscribe to events with ICS export.</li>" +
-      "<li><strong>Sign in by email</strong> — type your email, get a short code, you are in. No password to remember.</li>" +
-      "<li><strong>Save interest or register</strong> — keep the date, or sign up. For online events you get a join link in your dashboard. For in-person events you get a ticket with a QR code by email.</li>" +
-      "</ol>" +
-      "<h3>If you want to run events</h3>" +
-      "<ol class='hemw-steps'>" +
-      "<li><strong>Apply as an organizer</strong> — quick check, a one-time email code, then a short application: name, website, what you do, your directors, and a motto.</li>" +
-      "<li><strong>EventMark admin reviews</strong> — they can approve, reject with a reason, or ask for more info.</li>" +
-      "<li><strong>Create events as drafts</strong> — drafts are private to you. Add a title, description, location, set seats (min/max), choose format (in-person, online, or hybrid), add speakers, and pick a category (open source). You can also use external registration if you manage signups elsewhere.</li>" +
-      "<li><strong>Publish</strong> — the event shows on the public calendar. In-person attendees get a QR ticket by email. Online attendees see your join link in their dashboard. Organizers can invite speaker and volunteer contributions.</li>" +
-      "</ol>";
-    layout(html);
-    return Promise.resolve();
+    var target = "#/about?guide=overview";
+    if (window.location.hash !== target) {
+      window.location.hash = target;
+      return Promise.resolve();
+    }
+    return renderAbout();
   }
 
   function renderCheckin() {
@@ -2114,29 +2162,107 @@
   }
 
   function renderAbout() {
+    var query = parseHashQuery();
+    var initialTab = query.guide || "overview";
     var html =
+      "<div class='about-page'>" +
       "<h2>About EventMark</h2>" +
-      "<p>EventMark is an open platform to discover and join community and opensource events. The experience is intentionally simple: open the site, find a relevant event, sign in with your email, and participate.</p>" +
-      "<p><strong>Core principle:</strong> EventMark stays focused on opensource, community, and mission driven events first.</p>" +
-      "<p>We designed EventMark to support both participants and organizers with a clear, practical workflow. Participants can discover events, save interest, register, and keep access details in one place. Organizers can apply, create draft events, publish when ready, and manage invitations, passes, and check in operations.</p>" +
-      "<p>EventMark is built with a privacy minded and transparent approach. Passwordless sign in, abuse protection, and role based access are part of the foundation so communities can run reliable events without unnecessary complexity.</p>" +
-      "<h3>How it works by actors and roles</h3>" +
+      "<p>EventMark is an open platform to discover and join community and opensource events. Sign in with email — no password — and keep tickets, links, and your calendar in one place.</p>" +
+      "<p class='muted'>Use the guide tabs below to learn what each button does, how online and in-person events differ, and how to apply as an organization.</p>" +
+      "<nav id='about-guide-nav' class='about-guide-nav dashboard-tabs' role='tablist' aria-label='Help and guide'>" +
+      "<button type='button' class='dash-tab' data-about-guide-tab='overview' role='tab'>Overview</button>" +
+      "<button type='button' class='dash-tab' data-about-guide-tab='attend' role='tab'>Attending</button>" +
+      "<button type='button' class='dash-tab' data-about-guide-tab='events' role='tab'>Event types</button>" +
+      "<button type='button' class='dash-tab' data-about-guide-tab='organizers' role='tab'>Organizers</button>" +
+      "<button type='button' class='dash-tab' data-about-guide-tab='checkin' role='tab'>Check-in</button>" +
+      "</nav>" +
+      "<div class='about-guide-panels'>" +
+      "<section class='about-guide-panel card' data-about-guide-panel='overview'>" +
+      "<h3>Roles at a glance</h3>" +
       "<ul class='hemw-steps'>" +
-      "<li><strong>Guest:</strong> Browse events, search, and review details before signing in.</li>" +
-      "<li><strong>Participant:</strong> Sign in with email, save interest, register, and access links or ticket details from dashboard.</li>" +
-      "<li><strong>Organizer:</strong> Apply for approval, create draft events, publish events, manage invites, passes, sessions, and check in operations.</li>" +
-      "<li><strong>Admin:</strong> Review organizer requests, manage platform settings, and control branding and governance rules.</li>" +
-      "<li><strong>Check in staff:</strong> Scan or paste pass token, verify attendee, and complete entry at venue desk.</li>" +
+      "<li><strong>Guest</strong> — browse and search events without signing in.</li>" +
+      "<li><strong>Participant</strong> — sign in, save interest, register, RSVP, and view tickets or join links on your dashboard.</li>" +
+      "<li><strong>Organizer</strong> — apply as an approved organization, create draft events, publish, invite people, and run check-in.</li>" +
+      "<li><strong>Check-in staff</strong> — assigned by an organizer; scan QR codes at the door with their own login (no shared password).</li>" +
+      "<li><strong>Platform admin</strong> — reviews organizer applications and site settings (separate admin portal).</li>" +
       "</ul>" +
+      "<p>Jump to: " + aboutGuideLink("attend", "Attending & buttons") + " · " +
+      aboutGuideLink("events", "Native vs external events") + " · " +
+      aboutGuideLink("organizers", "Apply & create events") + " · " +
+      aboutGuideLink("checkin", "QR check-in") + "</p>" +
+      "</section>" +
+      "<section class='about-guide-panel card' data-about-guide-panel='attend'>" +
+      "<h3>Register, Interested, and Going / Maybe / Not going</h3>" +
+      "<p>On an event page under <strong>Attend</strong> you will see three different tools. They are <em>not</em> the same thing.</p>" +
+      "<div class='guide-table-wrap'><table class='guide-table'>" +
+      "<thead><tr><th>Button</th><th>What it does</th><th>Ticket / QR</th><th>Email</th></tr></thead>" +
+      "<tbody>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Interested</span></td><td data-label='What it does'>Bookmark the event on your dashboard and calendar. Good when you are curious but not ready to commit.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--muted'>None</span></td></tr>" +
+      "<tr class='guide-table-row--primary'><td data-label='Button'><span class='guide-btn-name'>Register</span></td><td data-label='What it does'>Official signup on EventMark. Reserves a seat when the event has a capacity limit. For in-person native events you receive a ticket code and QR by email.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--yes'>Yes</span></td><td data-label='Email'><span class='guide-pill guide-pill--yes'>QR email</span></td></tr>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Going</span></td><td data-label='What it does'>RSVP intent — “I plan to be there.” Used for counts and organizer reminders.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--muted'>Reminder</span></td></tr>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Maybe</span></td><td data-label='What it does'>RSVP — you might attend. No ticket is created.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--no'>No</span></td></tr>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Not going</span></td><td data-label='What it does'>RSVP — you will not attend. Helps organizers plan headcount.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--no'>No</span></td></tr>" +
+      "</tbody></table></div>" +
+      "<div class='guide-callout'><strong>Important:</strong> Marking <strong>Going</strong> does <em>not</em> give you a QR code. For door check-in at in-person events you must <strong>Register</strong> and use the ticket from your dashboard or email.</div>" +
+      "<h4>Typical paths</h4>" +
+      "<ol class='hemw-steps'>" +
+      "<li><strong>Just exploring</strong> — click <strong>Interested</strong>. The date appears on your dashboard and calendar strip.</li>" +
+      "<li><strong>Ready to attend (in person)</strong> — click <strong>Register</strong>, complete the quick check, receive QR ticket by email, show QR at the door.</li>" +
+      "<li><strong>Ready to attend (online)</strong> — click <strong>Register</strong>. After signup, open <strong>Dashboard → Registrations</strong> for the join link (no QR needed).</li>" +
+      "<li><strong>After you register</strong> — optionally set <strong>Going / Maybe / Not going</strong> so organizers know your intent (optional; separate from registration).</li>" +
+      "</ol>" +
+      "<p class='muted'>Your dashboard has separate tabs: Interested, Registrations (tickets/links), and RSVP status.</p>" +
+      "</section>" +
+      "<section class='about-guide-panel card' data-about-guide-panel='events'>" +
+      "<h3>Native, external, online, in-person, and hybrid</h3>" +
+      "<div class='guide-table-wrap'><table class='guide-table'>" +
+      "<thead><tr><th>Event kind</th><th>What participants see</th><th>Registration</th></tr></thead>" +
+      "<tbody>" +
+      "<tr class='guide-table-row--primary'><td data-label='Event kind'><span class='guide-btn-name'>Native (EventMark)</span></td><td data-label='What participants see'>Register and Interested buttons on EventMark. Organizers manage list, tickets, and check-in here.</td><td data-label='Registration'>On EventMark — ticket or waitlist</td></tr>" +
+      "<tr><td data-label='Event kind'><span class='guide-btn-name'>External registration</span></td><td data-label='What participants see'>“Register on organizer site” link instead of EventMark Register. Signups happen on the organizer’s own page.</td><td data-label='Registration'>Off-site — EventMark only tracks interest if you click Interested</td></tr>" +
+      "<tr><td data-label='Event kind'><span class='guide-btn-name'>In person</span></td><td data-label='What participants see'>Location/venue shown. After native registration: QR ticket for door check-in.</td><td data-label='Registration'>QR ticket email + dashboard</td></tr>" +
+      "<tr><td data-label='Event kind'><span class='guide-btn-name'>Online</span></td><td data-label='What participants see'>Join link stored by organizer. After registration: link appears on your dashboard (not a QR ticket).</td><td data-label='Registration'>Dashboard join link</td></tr>" +
+      "<tr><td data-label='Event kind'><span class='guide-btn-name'>Hybrid</span></td><td data-label='What participants see'>Both venue and online join link. Register on EventMark; in-person attendees get QR, online attendees use the link.</td><td data-label='Registration'>QR + join link as applicable</td></tr>" +
+      "</tbody></table></div>" +
+      "<div class='guide-callout'><strong>Waitlist:</strong> If an event is full, native registration adds you to a waitlist. When a seat opens, EventMark can promote you and send your ticket automatically.</div>" +
+      "<p>Organizers choose format and external vs native when " + aboutGuideLink("organizers", "creating an event") + ".</p>" +
+      "</section>" +
+      "<section class='about-guide-panel card' data-about-guide-panel='organizers'>" +
+      "<h3>Apply as an organization and create events</h3>" +
+      "<ol class='hemw-steps'>" +
+      "<li><strong>Sign in</strong> with your email (passwordless OTP).</li>" +
+      "<li><strong>Organize → Apply</strong> — submit your organization/entity: name, website, description, directors, motto, and whether you run in-person, online, or hybrid events.</li>" +
+      "<li><strong>Verify email</strong> — enter the one-time org-request code sent to your inbox.</li>" +
+      "<li><strong>Admin review</strong> — EventMark admins approve, reject, or ask for more information. When approved, your account is linked to the organization.</li>" +
+      "<li><strong>Create draft events</strong> — under Organize: title, banner, description, location, seats (min/max), format, speakers, native vs external registration, optional website link.</li>" +
+      "<li><strong>Publish</strong> — draft events are private until published; then they appear on Discover and the calendar.</li>" +
+      "<li><strong>Invitation suite</strong> — invites, email campaigns, analytics, venue layout, and assign " + aboutGuideLink("checkin", "check-in staff") + " by email.</li>" +
+      "</ol>" +
+      "<h4>Draft vs published</h4>" +
+      "<p>Only <strong>drafts that have never been published</strong> can be fully edited. After the first publish, some fields are locked to protect attendees who already registered.</p>" +
+      "<p class='muted'>Start from the top menu: <a href='#/organize'>Organize</a></p>" +
+      "</section>" +
+      "<section class='about-guide-panel card' data-about-guide-panel='checkin'>" +
+      "<h3>QR tickets and door check-in</h3>" +
+      "<ol class='hemw-steps'>" +
+      "<li>Participant <strong>registers</strong> on a native in-person event.</li>" +
+      "<li>EventMark emails a <strong>QR ticket</strong> and shows the same code on the participant dashboard.</li>" +
+      "<li>At the door, staff open <strong>Check-in desk</strong> (or Organize → Check-in for org members).</li>" +
+      "<li>Staff scan the QR or paste the token — guest is checked in once (duplicate scans are blocked).</li>" +
+      "</ol>" +
+      "<p>Organizers add volunteers under <strong>Organize → Check-in staff</strong>. Each person signs in with their own email; they never need the organizer’s password.</p>" +
+      "<p class='muted'>RSVP “Going” alone is not valid at the door — only a registered ticket QR works for native in-person events.</p>" +
+      "</section>" +
+      "</div>" +
       "<h3>Who builds it</h3>" +
-      "<p>EventMark is built with care by contributors and maintainers who believe open communities deserve dependable event infrastructure. " +
+      "<p>EventMark is built with care by contributors who believe open communities deserve dependable event infrastructure. " +
       "It is an initiative product launch by voxon.org&reg;. " +
       '<a href="https://github.com/voxondotorg/eventmark.org" rel="noopener noreferrer" target="_blank">Contribute on GitHub</a>.</p>' +
-      "<h3>Open Source License</h3>" +
-      "<p>EventMark is released under the <a href='/license'>MIT License</a>. Read full details on the license page.</p>" +
-      "<p>Ticket QR generation and scanning use additional open source components. See <a href='/third-party'>third-party notices</a> for attributions.</p>" +
-      "<p class='muted'>Want to contribute? Open issues and pull requests on GitHub.</p>";
+      "<h3>Open source</h3>" +
+      "<p>Released under the <a href='/license'>MIT License</a>. QR components: <a href='/third-party'>third-party notices</a>.</p>" +
+      "</div>";
     layout(html);
+    mountAboutGuide(initialTab);
     return Promise.resolve();
   }
 
@@ -2149,6 +2275,8 @@
         "<section class='home-intro'>" +
           "<h2>Discover events</h2>" +
           "<p>Find opensource, funsource and community events you care about — save what looks good, sign up when you are ready.</p>" +
+          "<p class='muted'><a href='#/about?guide=attend'>Help: Register vs Interested vs RSVP</a> · " +
+          "<a href='#/about?guide=organizers'>Running events as an organization</a></p>" +
           "<p class='home-intro-tools'><button type='button' id='btn-calendar-inline' class='btn-ghost'>Calendar</button></p>" +
           "<div class='search-row'>" +
           "<input type='search' id='event-search' class='search-input' placeholder='Search events...' value='" +
@@ -3218,6 +3346,7 @@
           escapeHtml(ev.id) +
           '">Interested</button>' +
           "</div>" +
+          "<p class='muted guide-help-link'><a href='#/about?guide=attend'>How do Register, Interested, and RSVP work?</a></p>" +
           "<div id='event-rsvp-panel' class='rsvp-panel'>" +
           "<p class='muted'>RSVP loading…</p>" +
           "</div></section>" +
@@ -3608,7 +3737,8 @@
         : "";
     layout(
       "<h2>Become an organizer</h2>" +
-        "<p class='muted'>Three short steps: a quick check, an email code, then your application. The EventMark admin reviews every request before you can publish events.</p>" +
+        "<p class='muted'>Three short steps: a quick check, an email code, then your application. The EventMark admin reviews every request before you can publish events. " +
+        "<a href='#/about?guide=organizers'>Read the full organizer guide</a>.</p>" +
         rejectedNote +
         "<ol class='hemw-steps'>" +
         "<li><strong>Step 1</strong> — quick check + send a verification code to your email.</li>" +
@@ -4062,7 +4192,9 @@
       .join("");
     layout(
       "<h2>Organize</h2>" +
-        "<p class='muted'>Welcome — your organization is approved. Create events as drafts first, publish when ready.</p>" +
+        "<p class='muted'>Welcome — your organization is approved. Create events as drafts first, publish when ready. " +
+        "<a href='#/about?guide=organizers'>Organizer guide</a> · " +
+        "<a href='#/about?guide=checkin'>Check-in help</a></p>" +
         "<div id='org-ws-tabs' class='dashboard-tabs' role='tablist' aria-label='Organizer workspace'>" +
         "<button type='button' class='dash-tab active' data-org-ws-tab='create' role='tab' aria-selected='true'>Create Event (Draft)</button>" +
         "<button type='button' class='dash-tab' data-org-ws-tab='events' role='tab' aria-selected='false'>Your Events</button>" +

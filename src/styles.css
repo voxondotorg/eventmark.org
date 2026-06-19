@@ -21,6 +21,8 @@
 body.light {
   --bg: #fafafa;
   --panel: #ffffff;
+  --panel-elevated: #f3f3f3;
+  --panel-hover: #ececec;
   --border: #dddddd;
   --accent: #111111;
   --text: #151515;
@@ -1519,6 +1521,230 @@ body.light input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 
 .hemw-steps li {
   margin-bottom: 0.4rem;
+}
+
+.about-page {
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.about-guide-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.25rem 0 1rem;
+}
+
+.about-guide-panels {
+  margin-bottom: 2rem;
+}
+
+.about-guide-panel {
+  display: none;
+  margin-top: 0;
+}
+
+.about-guide-panel.active {
+  display: block;
+}
+
+.about-guide-panel h3 {
+  margin-top: 0;
+}
+
+.about-guide-panel h4 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.guide-table-wrap {
+  margin: 0.85rem 0 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.guide-table th,
+.guide-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.45;
+}
+
+.guide-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.guide-table th {
+  background: var(--panel-elevated);
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.guide-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+body.light .guide-table tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.guide-table-row--primary {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+body.light .guide-table-row--primary {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.guide-table-row--primary td:first-child {
+  border-left: 3px solid var(--accent);
+}
+
+.guide-btn-name {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.guide-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.guide-pill--yes {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.guide-pill--no {
+  color: var(--muted);
+  background: transparent;
+}
+
+.guide-pill--muted {
+  color: var(--muted);
+  background: var(--panel-elevated);
+}
+
+.guide-callout {
+  border-left: 3px solid var(--accent);
+  padding: 0.65rem 0.85rem;
+  margin: 0.75rem 0 1rem;
+  background: var(--panel);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.guide-help-link {
+  margin: 0.65rem 0 0;
+  font-size: 0.85rem;
+}
+
+.guide-help-link a {
+  color: var(--muted);
+}
+
+.guide-help-link a:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .guide-table-wrap {
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .guide-table,
+  .guide-table tbody,
+  .guide-table tr,
+  .guide-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .guide-table thead {
+    display: none;
+  }
+
+  .guide-table tr {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 0.65rem;
+    padding: 0.65rem 0.75rem;
+    background: var(--panel);
+  }
+
+  .guide-table tbody tr:nth-child(even),
+  .guide-table-row--primary {
+    background: var(--panel);
+  }
+
+  .guide-table-row--primary td:first-child {
+    border-left: 0;
+  }
+
+  .guide-table-row--primary {
+    border-left: 3px solid var(--accent);
+  }
+
+  .guide-table td {
+    border: 0;
+    padding: 0.35rem 0;
+  }
+
+  .guide-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.2rem;
+  }
+
+  .guide-table td:first-child {
+    padding-top: 0;
+    margin-bottom: 0.35rem;
+  }
+
+  .guide-table td:first-child::before {
+    display: none;
+  }
+
+  .guide-table td:not(:first-child) {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 38%) 1fr;
+    gap: 0.5rem;
+    align-items: start;
+  }
+
+  .guide-table td:not(:first-child)::before {
+    margin-bottom: 0;
+  }
 }
 
 /* --- Inline form errors (replaces alert popups) --- */
