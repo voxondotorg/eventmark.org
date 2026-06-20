@@ -66,12 +66,12 @@ Please do not commit API keys, passwords, or personal email addresses.
 
 ## Sponsorship & professional support
 
-EventMark is maintained by [Voxon](https://voxon.org).
+EventMark is maintained at [eventmark.org](https://eventmark.org).
 
 We welcome **corporate grants and support contracts** for development, security work, hosting guidance, and feature integration — especially if you run EventMark in production.
 
 - **GitHub:** use the **Sponsor** button on this repo (when enabled on the organization profile).
-- **Corporate support:** contact us via [voxon.org](https://voxon.org) to discuss a simple maintenance or development agreement.
+- **Corporate support:** contact us via [eventmark.org](https://eventmark.org) to discuss a simple maintenance or development agreement.
 
 Typical support scope: bug fixes, security patches, release notes, and agreed feature work — billed as software services (not donations).
 
