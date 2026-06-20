@@ -1,0 +1,16 @@
+{
+  "name": "eventmark-admin-portal",
+  "version": "1.0.0",
+  "description": "EventMark Admin Portal — platform operator UI (source only)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260430.0",
+    "typescript": "^5.8.3"
+  }
+}

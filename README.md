@@ -21,11 +21,18 @@ src/                 Main app — HTML, CSS, JavaScript, TypeScript
   *.ts               Auth, database helpers, features
   assets/            Images, icons, static JS
   legal/             License text and third-party notices
+
+admin-portal/        Platform admin UI (optional)
+  src/worker.ts      Review org applications, users, settings
+  src/admin.css      Admin styles
 ```
 
-The main app includes participant flows (discover, register, tickets, dashboard) and organizer flows (apply, create events, invitations, check-in staff).
+| Part | Who uses it |
+|------|-------------|
+| **`src/`** (main app) | Guests, participants, organizers, check-in staff |
+| **`admin-portal/`** | Platform operators (approve orgs, manage users, site settings) |
 
-Platform operator admin tools live in the private deploy repo only — not in this open-source tree.
+Deploy config and secrets are not included — wire up your own host and protect the admin app (e.g. separate subdomain + access control).
 
 ---
 
