@@ -4,9 +4,9 @@ Open-source event discovery and registration platform.
 
 This repository is **source code only**. There is no deploy config, no cloud account IDs, and no secrets. Clone it, read it, and run or host it however you like.
 
-**License:** [MIT](LICENSE)
+**License:** [MIT](LICENSE) — full licensing notes at `/license` when running the app.
 
-**Third-party opensource:** Ticket QR generation and scanning use vendored libraries (Project Nayuki QR generator, jsQR). See `src/legal/third-party-notices.txt` for attributions.
+**Third-party opensource:** Ticket QR generation and scanning use vendored libraries (Project Nayuki QR generator, jsQR). See `/third-party` for attributions.
 
 ---
 
