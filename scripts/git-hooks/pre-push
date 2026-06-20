@@ -1,0 +1,23 @@
+#!/bin/sh
+# Block push if commits credit or mention Cursor / cursoragent (GitHub counts these as contributors).
+FORBIDDEN='cursoragent|co-authored-by:.*cursor|cursor agent'
+
+if git rev-parse --verify "@{u}" >/dev/null 2>&1; then
+  REVS=$(git rev-list "@{u}..HEAD" 2>/dev/null)
+else
+  REVS=$(git rev-list HEAD 2>/dev/null)
+fi
+
+for sha in $REVS; do
+  BODY=$(git log -1 --format=%B "$sha")
+  if printf '%s\n' "$BODY" | grep -qiE "$FORBIDDEN"; then
+    echo ""
+    echo "Push blocked: commit ${sha:0:7} mentions Cursor or cursoragent."
+    echo "Edit the commit message — no co-author lines, no 'cursoragent' or 'Cursor Agent' text."
+    echo "Fix latest: git commit --amend"
+    echo ""
+    exit 1
+  fi
+done
+
+exit 0

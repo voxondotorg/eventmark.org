@@ -1,0 +1,7 @@
+#!/bin/sh
+# Strip bot / AI co-author trailers (runs before commit-msg).
+COMMIT_MSG_FILE="$1"
+TMP="${COMMIT_MSG_FILE}.strip"
+grep -viE '^co-authored-by:.*(cursor|cursoragent@|copilot)' "$COMMIT_MSG_FILE" > "$TMP" || true
+mv "$TMP" "$COMMIT_MSG_FILE"
+exit 0

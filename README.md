@@ -59,6 +59,14 @@ Nothing in this repo pins you to a specific host. Adapt the worker layer to Node
 
    Requires Node.js 20+. This step is optional and only checks types — it does not deploy anything.
 
+4. **Git hooks (recommended for maintainers):** keeps commit messages clean so only human authors appear on GitHub:
+
+   ```bash
+   bash scripts/install-git-hooks.sh
+   ```
+
+   Do not add bot or AI co-author lines to commits.
+
 ---
 
 ## Contributing
@@ -77,7 +85,8 @@ EventMark is maintained at [eventmark.org](https://eventmark.org).
 
 We welcome **corporate grants and support contracts** for development, security work, hosting guidance, and feature integration — especially if you run EventMark in production.
 
-- **GitHub:** use the **Sponsor** button on this repo (when enabled on the organization profile).
+- **GitHub Sponsors:** pending approval for `voxondotorg` — use [eventmark.org](https://eventmark.org) until the Sponsor button is live.
+- **Bulk sponsorship (companies):** after Sponsors is approved, upload a CSV with **Maintainer Username** and **Amount in USD** (see [`.github/sponsorship-template.csv`](.github/sponsorship-template.csv)).
 - **Corporate support:** contact us via [eventmark.org](https://eventmark.org) to discuss a simple maintenance or development agreement.
 
 Typical support scope: bug fixes, security patches, release notes, and agreed feature work — billed as software services (not donations).

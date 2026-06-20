@@ -1,4 +1,4 @@
-# GitHub "Sponsor" button — see README for corporate support options.
-github: voxondotorg
+# GitHub Sponsors: add `github: voxondotorg` after your org is approved.
+# Until then, only custom links work (no FUNDING.yml parse errors).
 custom:
   - https://eventmark.org
