@@ -6,7 +6,7 @@ This repository is **source code only**. There is no deploy config, no cloud acc
 
 **License:** [MIT](LICENSE)
 
-**Third-party open source:** Ticket QR generation and scanning use vendored libraries (Project Nayuki QR generator, jsQR). See `src/legal/third-party-notices.txt` for attributions.
+**Third-party opensource:** Ticket QR generation and scanning use vendored libraries (Project Nayuki QR generator, jsQR). See `src/legal/third-party-notices.txt` for attributions.
 
 ---
 
@@ -16,22 +16,16 @@ This repository is **source code only**. There is no deploy config, no cloud acc
 src/                 Main app — HTML, CSS, JavaScript, TypeScript
   index.html         App shell
   app.js             Front-end UI
-  styles.css         Styles
+  app.css, voxui.css Styles
   worker.ts          Server / API layer (TypeScript)
   *.ts               Auth, database helpers, features
   assets/            Images, icons, static JS
   legal/             License text and third-party notices
-
-admin-portal/        Optional admin UI (TypeScript)
-  src/worker.ts      Admin server + UI
 ```
 
-| Part | Required? |
-|------|-----------|
-| **`src/`** (main app) | **Yes** — the product people use |
-| **`admin-portal/`** | **Optional** — extra dashboard for operators; skip it if you only need the public site |
+The main app includes participant flows (discover, register, tickets, dashboard) and organizer flows (apply, create events, invitations, check-in staff).
 
-The main app already includes organizer flows. The admin portal is a separate module you can use or ignore.
+Platform operator admin tools live in the private deploy repo only — not in this open-source tree.
 
 ---
 

@@ -231,7 +231,7 @@ export async function sendOrgRequestReceivedEmail(
     `Organization: ${args.organizationName}`,
     `Submitted: ${args.submittedAt}`,
     "",
-    "Thank you — your application is in the review queue.",
+    "Thank you: your application is in the review queue.",
     "",
     "What happens next:",
     "- The EventMark admin team will review your application.",
@@ -400,7 +400,7 @@ export async function sendOrgRequestStatusEmail(
 ): Promise<void> {
   const subject =
     args.status === "APPROVED"
-      ? `Approved: ${args.organizationName} — you can now create events`
+      ? `Approved: ${args.organizationName}: you can now create events`
       : args.status === "REJECTED"
         ? `Update on your organizer application: ${args.organizationName}`
         : `Action required: more information for ${args.organizationName}`;
@@ -418,7 +418,7 @@ export async function sendOrgRequestStatusEmail(
           "Next steps:",
           `1. Sign in and open: ${args.organizeUrl}`,
           "2. Create a draft event (title, date, location or online link, seats).",
-          "3. Publish when ready — your event appears on the public calendar.",
+          "3. Publish when ready: your event appears on the public calendar.",
           "4. In-person attendees receive a QR ticket by email after registration.",
         ]
       : args.status === "INFO_REQUESTED"

@@ -2,7 +2,7 @@
   "name": "eventmark",
   "version": "1.0.0",
   "private": false,
-  "description": "EventMark — open-source event discovery and registration (source only)",
+  "description": "EventMark: opensource event discovery and registration (source only)",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -12,7 +12,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && cd admin-portal && tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260430.0",

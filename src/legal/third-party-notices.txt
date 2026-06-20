@@ -1,8 +1,8 @@
 EventMark Third-Party Notices
 =============================
 
-EventMark is open source (MIT License). Some bundled components are also
-open source. Copyright and license terms for those components are reproduced
+EventMark is opensource (MIT License). Some bundled components are also
+opensource. Copyright and license terms for those components are reproduced
 below. Full license texts are included in the vendored source files where
 required.
 

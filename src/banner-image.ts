@@ -1,7 +1,7 @@
 /** Validate optimized event banner uploads (150×150 WebP or JPEG). */
 
 export const BANNER_SIZE = 150;
-export const MAX_BANNER_BYTES = 80_000;
+export const MAX_BANNER_BYTES = 69 * 1024;
 
 export function jpegDimensions(data: Uint8Array): { w: number; h: number } | null {
   let i = 2;

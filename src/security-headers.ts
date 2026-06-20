@@ -57,7 +57,9 @@ export function securityProfileFor(request: Request): SecurityProfile {
   if (/^\/api\/events\/[^/]+\/embed\.html$/.test(pathname)) return "embed";
   if (pathname.startsWith("/api/")) return "api";
   if (
+    pathname === "/app.css" ||
     pathname === "/styles.css" ||
+    pathname === "/voxui.css" ||
     pathname === "/app.js" ||
     pathname === "/license" ||
     pathname === "/third-party" ||

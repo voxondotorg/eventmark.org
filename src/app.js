@@ -23,6 +23,9 @@
     calendarBadges: [],
     calendarTotalEvents: 0,
     calendarSelectedKey: null,
+    calendarView: "all",
+    calendarItemsAll: [],
+    calendarEventMeta: {},
     eventSearchQuery: "",
   };
 
@@ -63,7 +66,8 @@
     var stack = ensureToastStack();
     var node = document.createElement("div");
     var k = kind === "error" ? "error" : kind === "success" ? "success" : "info";
-    node.className = "toast toast--" + k;
+    node.className = "vox-toast toast toast--" + k;
+    node.classList.add("show");
     node.setAttribute("role", k === "error" ? "alert" : "status");
     var msg = document.createElement("span");
     msg.className = "toast-msg";
@@ -71,7 +75,7 @@
     node.appendChild(msg);
     var btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "toast-close";
+    btn.className = "vox-icon-btn toast-close";
     btn.setAttribute("aria-label", "Dismiss");
     btn.textContent = "×";
     node.appendChild(btn);
@@ -89,7 +93,7 @@
     return dismiss;
   }
 
-  /** Map server / network errors to short, human messages — never show raw codes. */
+  /** Map server / network errors to short, human messages: never show raw codes. */
   function friendlyError(err, fallback) {
     var d = err && err.data ? err.data : null;
     var code = d && d.error;
@@ -115,7 +119,7 @@
       return emailMsg;
     }
     if (code === "invalid_dimensions") return "Banner must be exactly 150×150 pixels after optimization.";
-    if (code === "banner_too_large") return "Banner file is too large. Try a simpler image.";
+    if (code === "banner_too_large") return "Banner file must be 69 KB or smaller after optimization. Try a simpler image.";
     if (code === "invalid_format") return "Banner must be a JPEG or WebP image.";
     if (code === "title_too_long") return "Event title must be 26 characters or fewer.";
     if (code === "description_too_long") return "Description must be 500 words or fewer.";
@@ -141,9 +145,9 @@
     if (code === "orgreq_not_verified") return "Please verify your email with the org-request code first.";
     if (code === "org_requests_paused") return "Organizer applications are temporarily paused. Please try again later.";
     if (code === "registrations_paused") return "Registrations are temporarily paused on this site. Please try again later.";
-    if (code === "event_full") return "This event is full — no seats remaining.";
+    if (code === "event_full") return "This event is full: no seats remaining.";
     if (code === "missing_org") return "You are not part of an approved organization yet.";
-    if (code === "org_not_approved") return "Your organization is not approved yet — wait for the EventMark admin decision.";
+    if (code === "org_not_approved") return "Your organization is not approved yet: wait for the EventMark admin decision.";
     if (code === "event_not_editable") {
       return "Published events cannot be edited directly. Move the event back to draft, make your changes, then publish again.";
     }
@@ -155,7 +159,7 @@
     if (code === "description_min_words") {
       return "Description must be at least " + ORG_DESCRIPTION_MIN_WORDS + " words.";
     }
-    if (code === "invalid_url") return "That link is not allowed. Use a full http(s) URL from your own site — shorteners and suspicious links are blocked.";
+    if (code === "invalid_url") return "That link is not allowed. Use a full http(s) URL from your own site: shorteners and suspicious links are blocked.";
     if (code === "invalid_director_link") return "One of the director links is not a valid URL.";
     if (code === "not_info_requested") return "This contribution is not waiting for more information.";
     if (code === "already_pending") return "Your verification request is already pending review.";
@@ -195,6 +199,59 @@
     holder.classList.remove("field--error");
     var existing = holder.querySelector(".field-error");
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  }
+
+  function applyVoxFormClasses(root) {
+    var container = root && root.querySelectorAll ? root : document.getElementById("app");
+    if (!container) return;
+
+    container.querySelectorAll(".row, .director-row, .speaker-row, .staff-row").forEach(function (el) {
+      el.classList.add("vox-hbox");
+    });
+    container.querySelectorAll(".vox-form").forEach(function (el) {
+      el.classList.add("vox-vbox");
+    });
+
+    container.querySelectorAll(".field").forEach(function (field) {
+      field.classList.add("vox-vbox");
+      field.querySelectorAll(":scope > label:not(.checkbox):not(.vox-label)").forEach(function (label) {
+        label.classList.add("vox-label");
+      });
+    });
+    container.querySelectorAll("label.vox-label, label.checkbox").forEach(function (label) {
+      if (!label.classList.contains("vox-label")) {
+        label.classList.add("vox-label");
+      }
+    });
+    container.querySelectorAll(
+      ".field input, .field textarea, .field select, .director-row input, .speaker-row input, .vox-hbox input, .vox-hbox textarea, .vox-hbox select, .row input, .row textarea, .row select, #modal-body input, #modal-body textarea, #modal-body select, .vox-form input, .vox-form textarea, .vox-form select"
+    ).forEach(function (el) {
+      var type = (el.getAttribute("type") || "").toLowerCase();
+      if (type === "checkbox") {
+        el.classList.add("vox-checkbox");
+        return;
+      }
+      if (type === "radio") {
+        el.classList.add("vox-radio");
+        return;
+      }
+      if (type === "file") return;
+      if (type === "datetime-local" || type === "date") {
+        el.classList.add("vox-date-picker");
+      } else if (type === "time") {
+        el.classList.add("vox-time-picker");
+      }
+      if (el.tagName === "TEXTAREA") {
+        el.classList.add("vox-textarea");
+      } else if (el.tagName === "SELECT") {
+        el.classList.add("vox-select");
+      } else if (el.tagName === "INPUT") {
+        el.classList.add("vox-input");
+      }
+    });
+    container.querySelectorAll("fieldset.field").forEach(function (fs) {
+      fs.classList.add("vox-box");
+    });
   }
 
   function clearFieldErrors(rootEl) {
@@ -248,7 +305,7 @@
     var start = formatEventDateTime(startsAt);
     if (!start) return "";
     var end = formatEventDateTime(endsAt);
-    return end ? start + " — " + end : start;
+    return end ? start + " to " + end : start;
   }
 
   function formatAgendaWhen(startsAt, endsAt) {
@@ -271,7 +328,7 @@
     }
     var endMonth = end.toLocaleDateString(undefined, { month: "short" });
     if (start.getFullYear() === end.getFullYear()) {
-      return month + " " + startDay + " – " + endMonth + " " + end.getDate();
+      return month + " " + startDay + " - " + endMonth + " " + end.getDate();
     }
     return (
       month +
@@ -450,11 +507,11 @@
   }
 
   function encodeBannerBlob(canvas, resolve, reject) {
-    var qualities = [0.82, 0.72, 0.62, 0.52];
+    var qualities = [0.82, 0.72, 0.62, 0.52, 0.42];
     var i = 0;
     function tryNext() {
       if (i >= qualities.length) {
-        reject(new Error("Could not optimize image below size limit. Try a simpler image."));
+        reject(new Error("Optimized image is still over 69 KB. Try a simpler photo with less detail."));
         return;
       }
       canvas.toBlob(
@@ -463,7 +520,7 @@
             reject(new Error("Could not optimize image."));
             return;
           }
-          if (blob.size <= 60000 || i === qualities.length - 1) {
+          if (blob.size <= MAX_BANNER_BYTES) {
             resolve(blob);
             return;
           }
@@ -555,6 +612,8 @@
     if (wrap) wrap.classList.add("hidden");
     var img = $("#ev-banner-preview");
     if (img) img.removeAttribute("src");
+    var meta = $("#ev-banner-preview-meta");
+    if (meta) meta.textContent = "";
   }
 
   function showPendingBannerPreview(blob) {
@@ -563,95 +622,56 @@
     state.pendingBannerPreviewUrl = URL.createObjectURL(blob);
     var wrap = $("#ev-banner-preview-wrap");
     var img = $("#ev-banner-preview");
+    var meta = $("#ev-banner-preview-meta");
     if (wrap) wrap.classList.remove("hidden");
     if (img) img.src = state.pendingBannerPreviewUrl;
+    if (meta) meta.textContent = formatBannerSize(blob.size);
   }
 
   function showExistingBannerPreview(ev) {
     clearPendingBannerPreview();
+    if (!ev || !ev.hasBanner) {
+      var wrapHidden = $("#ev-banner-preview-wrap");
+      if (wrapHidden) wrapHidden.classList.add("hidden");
+      return;
+    }
     var wrap = $("#ev-banner-preview-wrap");
     var img = $("#ev-banner-preview");
+    var meta = $("#ev-banner-preview-meta");
     if (wrap) wrap.classList.remove("hidden");
-    if (img) img.src = eventBannerUrl(ev || {});
+    if (img) img.src = eventBannerUrl(ev);
+    if (meta) meta.textContent = "Saved cover · 150×150 px · max 69 KB";
+  }
+
+  function formatEventCardMeta(ev) {
+    var date = formatEventShortDate(ev.startsAt, ev.endsAt);
+    var place =
+      ev.mode === "online"
+        ? "Online"
+        : String(ev.location || "TBD").split(",")[0].trim();
+    return date + " • " + place + " • " + (ev.interestedCount || 0) + " interested";
   }
 
   function renderEventCard(ev) {
     var ext = ev.is_external;
-    var eventUrl = window.location.origin + "/#/event/" + encodeURIComponent(ev.id);
-    var shareX =
-      "https://x.com/intent/tweet?text=" +
-      encodeURIComponent((ev.title || "Event") + " on EventMark") +
-      "&url=" +
-      encodeURIComponent(eventUrl);
-    var shareLinkedin =
-      "https://www.linkedin.com/sharing/share-offsite/?url=" +
-      encodeURIComponent(eventUrl);
-    var shareWhatsapp =
-      "https://wa.me/?text=" +
-      encodeURIComponent((ev.title || "Event") + " on EventMark " + eventUrl);
-    function toCalStamp(iso) {
-      return String(iso || "").replace(/[-:]/g, "").replace(/\.\d{3}Z?$/, "Z");
-    }
-    var googleCal =
-      "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-      "&text=" + encodeURIComponent(ev.title || "Event") +
-      "&dates=" + encodeURIComponent(toCalStamp(ev.startsAt) + "/" + toCalStamp(ev.endsAt)) +
-      "&details=" + encodeURIComponent((ev.description || "") + "\n" + eventUrl) +
-      "&location=" + encodeURIComponent(ev.location || "");
     var registerBtn = ext
-      ? '<a class="event-card__btn event-card__btn--primary" href="' +
+      ? '<a class="vox-btn vox-btn-primary" href="' +
         escapeHtml(ev.external_url || "#") +
         '" target="_blank" rel="noopener">Register</a>'
-      : '<button type="button" class="event-card__btn event-card__btn--primary" data-native-register="' +
+      : '<button type="button" class="vox-btn vox-btn-primary" data-native-register="' +
         escapeHtml(ev.id) +
         '">Register</button>';
-    var desc = escapeHtml(ev.description || "No description provided yet.");
-    var whenLine = escapeHtml(formatEventWhen(ev.startsAt, ev.endsAt));
     var bannerHtml = renderEventBannerVisual(ev, "event-card__banner");
     return (
-      '<article class="event-card" data-event-id="' + escapeHtml(ev.id) + '">' +
-      '<header class="event-card__header">' +
+      '<article class="vox-card event-card" data-event-id="' + escapeHtml(ev.id) + '">' +
       bannerHtml +
-      '<div class="event-card__headline">' +
-      "<h3 class=\"event-card__title\">" + escapeHtml(ev.title) + "</h3>" +
-      '<p class="event-card__country">' + escapeHtml(formatEventCountryLabel(ev)) + "</p>" +
-      '<p class="event-card__short-date">' + escapeHtml(formatEventShortDate(ev.startsAt, ev.endsAt)) + "</p>" +
-      "</div></header>" +
-      '<div class="event-card__accordions">' +
-      '<div class="event-card__accordion is-open" data-accordion>' +
-      '<button type="button" class="event-card__accordion-trigger" data-accordion-trigger aria-expanded="true">' +
-      "<span>Date/Time</span>" +
-      '<svg class="event-card__chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>' +
-      "</button>" +
-      '<div class="event-card__accordion-panel" data-accordion-panel aria-hidden="false">' +
-      '<div class="event-card__accordion-body">' + whenLine + "</div></div></div>" +
-      '<div class="event-card__accordion is-open" data-accordion>' +
-      '<button type="button" class="event-card__accordion-trigger" data-accordion-trigger aria-expanded="true">' +
-      "<span>Description</span>" +
-      '<svg class="event-card__chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>' +
-      "</button>" +
-      '<div class="event-card__accordion-panel" data-accordion-panel aria-hidden="false">' +
-      '<div class="event-card__accordion-body">' + desc + "</div></div></div></div>" +
-      '<p class="event-card__metrics">' +
-      '<svg class="event-card__eye" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5M12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></svg>' +
-      "<span>" + (ev.viewCount || 0) + " views, " + (ev.interestedCount || 0) + " interested</span></p>" +
-      '<footer class="event-card__footer">' +
+      '<div class="event-card__body">' +
+      '<h3 class="vox-heading event-card__title">' + escapeHtml(ev.title) + "</h3>" +
+      '<p class="event-card__meta">' + escapeHtml(formatEventCardMeta(ev)) + "</p>" +
       '<div class="event-card__actions">' +
       registerBtn +
-      '<a class="event-card__btn event-card__btn--outline" href="#/event/' +
-      escapeHtml(ev.id) +
-      '">More Details</a>' +
-      '<div class="event-card__share">' +
-      '<button type="button" class="event-card__share-btn" data-share-toggle aria-label="Share event" aria-expanded="false" aria-haspopup="true">' +
-      '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92"/></svg>' +
-      "</button>" +
-      '<div class="event-card__share-popup" role="menu">' +
-      '<a class="event-card__share-link" href="' + escapeHtml(shareX) + '" target="_blank" rel="noopener" role="menuitem">X</a>' +
-      '<a class="event-card__share-link" href="' + escapeHtml(shareLinkedin) + '" target="_blank" rel="noopener" role="menuitem">LinkedIn</a>' +
-      '<a class="event-card__share-link" href="' + escapeHtml(shareWhatsapp) + '" target="_blank" rel="noopener" role="menuitem">WhatsApp</a>' +
-      '<a class="event-card__share-link" href="' + escapeHtml(googleCal) + '" target="_blank" rel="noopener" role="menuitem">Google Calendar</a>' +
-      '<a class="event-card__share-link" href="/api/events/' + escapeHtml(ev.id) + '/ics.ics" role="menuitem">ICS</a>' +
-      "</div></div></div></footer></article>"
+      '<a class="vox-btn" href="#/event/' + escapeHtml(ev.id) + '">View details</a>' +
+      "</div></div></article>"
     );
   }
 
@@ -669,20 +689,6 @@
     if (state.currentEvent && state.currentEvent.id === eventId) {
       state.currentEvent.viewCount = viewCount;
     }
-    var card = document.querySelector('.event-card[data-event-id="' + eventId + '"]');
-    if (!card) return;
-    var metrics = card.querySelector(".event-card__metrics span");
-    if (!metrics) return;
-    var interested = 0;
-    if (state.events) {
-      for (i = 0; i < state.events.length; i++) {
-        if (state.events[i].id === eventId) {
-          interested = state.events[i].interestedCount || 0;
-          break;
-        }
-      }
-    }
-    metrics.textContent = viewCount + " views, " + interested + " interested";
   }
 
   function closeEventSharePopups(except) {
@@ -729,13 +735,25 @@
   }
 
   function applyTheme(theme) {
+    var root = document.documentElement;
     var body = document.body;
-    if (theme === "light") {
+    var light = theme === "light";
+    var mode = light ? "light" : "dark";
+    root.setAttribute("data-theme", mode);
+    body.setAttribute("data-theme", mode);
+    if (light) {
       body.classList.add("light");
     } else {
       body.classList.remove("light");
     }
-    var light = theme === "light";
+    var metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute("content", light ? "#fafafa" : "#0d0d0d");
+    }
+    var favicon = document.querySelector('link[rel="icon"]');
+    if (favicon) {
+      favicon.setAttribute("href", light ? "/assets/logo-black.svg" : "/assets/logo-white.svg");
+    }
     var logo = $("#brand-logo");
     if (logo) {
       logo.src = light ? "/assets/logo-black.svg" : "/assets/logo-white.svg";
@@ -747,6 +765,9 @@
     var themeBtn = $("#btn-theme");
     if (themeBtn) {
       themeBtn.setAttribute("aria-label", light ? "Use dark theme" : "Use light theme");
+    }
+    if ($("#calendar-strip")) {
+      refreshCalendarStrip();
     }
   }
 
@@ -821,11 +842,11 @@
   }
 
   function openModal(html) {
-    closeCalendarDrawer();
     closeMobileNav(); // Close mobile nav when opening modal
     var root = $("#modal-root");
     var body = $("#modal-body");
     body.innerHTML = html;
+    applyVoxFormClasses(body);
     root.classList.add("open");
     root.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden"; // Prevent background scrolling on mobile
@@ -941,7 +962,7 @@
     });
   }
 
-  /** Turnstile siteverify accepts a token once — call after request-otp so verify-otp gets a fresh token. */
+  /** Turnstile siteverify accepts a token once: call after request-otp so verify-otp gets a fresh token. */
   function resetTurnstileWidget(tokenHolder, containerId, onReadyState) {
     tokenHolder.value = "";
     if (typeof onReadyState === "function") onReadyState(false);
@@ -1098,6 +1119,77 @@
     existing.textContent = msg;
   }
 
+  function syncCalendarViewHash(view) {
+    var next = view === "mine" ? "#/calendar?view=mine" : "#/calendar";
+    if (window.location.hash === next) return;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", next);
+    } else {
+      window.location.hash = next;
+    }
+  }
+
+  function eventToCalendarItem(ev) {
+    return {
+      id: ev.id,
+      title: ev.title,
+      startsAt: ev.startsAt,
+      endsAt: ev.endsAt,
+      location: ev.location || "",
+      is_external: ev.is_external,
+      mode: ev.mode || "in_person",
+    };
+  }
+
+  function buildCalendarMineData(me) {
+    var meta = {};
+    var items = [];
+    var seen = {};
+    function add(ev, patch) {
+      if (!ev || !ev.id) return;
+      if (!meta[ev.id]) meta[ev.id] = {};
+      Object.assign(meta[ev.id], patch);
+      if (seen[ev.id]) return;
+      seen[ev.id] = true;
+      items.push(eventToCalendarItem(ev));
+    }
+    (me.interestedEvents || []).forEach(function (ev) {
+      add(ev, { interested: true });
+    });
+    (me.registeredEvents || []).forEach(function (ev) {
+      add(ev, { registered: true });
+    });
+    (me.registrations || []).forEach(function (row) {
+      if (row.event) add(row.event, { registered: true });
+    });
+    (me.rsvps || []).forEach(function (row) {
+      var ev = row.event;
+      var status = (row.rsvp && row.rsvp.status) || row.status || "";
+      if (ev) add(ev, { rsvp: status });
+    });
+    return { items: items, meta: meta };
+  }
+
+  function filterCalendarItemsToMonth(items, y, m) {
+    var ym = y + "-" + (m + 1 < 10 ? "0" : "") + (m + 1);
+    return (items || []).filter(function (ev) {
+      return utcDayKey(ev.startsAt).indexOf(ym) === 0;
+    });
+  }
+
+  function calendarMineTags(eventId) {
+    var m = state.calendarEventMeta[eventId];
+    if (!m) return "";
+    var tags = [];
+    if (m.registered) tags.push("<span class='vox-badge cal-tag cal-tag--registered'>Registered</span>");
+    if (m.interested) tags.push("<span class='vox-badge cal-tag cal-tag--interest'>Interested</span>");
+    if (m.rsvp === "going") tags.push("<span class='vox-badge cal-tag cal-tag--rsvp'>Going</span>");
+    else if (m.rsvp === "maybe") tags.push("<span class='vox-badge cal-tag cal-tag--maybe'>Maybe</span>");
+    else if (m.rsvp === "not_going") tags.push("<span class='vox-badge cal-tag cal-tag--declined'>Not going</span>");
+    if (!tags.length) return "";
+    return "<p class='cal-day-tags'>" + tags.join(" ") + "</p>";
+  }
+
   function utcDayKey(iso) {
     return String(iso || "").slice(0, 10);
   }
@@ -1152,18 +1244,33 @@
     });
     var ym = y + "-" + (m + 1 < 10 ? "0" : "") + (m + 1) + "-";
     var html = "";
-    html += "<div class='cal-toolbar'>";
+    html += "<div class='vox-calendar'>";
+    html += "<div class='vox-bar vox-calendar-header cal-toolbar'>";
+    html += "<div class='calendar-view-tabs vox-hbox' role='tablist' aria-label='Calendar view'>";
     html +=
-      "<button type='button' class='btn-ghost' data-cal-prev='1' aria-label='Previous month'" +
+      "<button type='button' class='vox-btn calendar-view-tab" +
+      (state.calendarView === "all" ? " active" : "") +
+      "' data-cal-view='all' role='tab' aria-selected='" +
+      (state.calendarView === "all" ? "true" : "false") +
+      "'>All events</button>";
+    html +=
+      "<button type='button' class='vox-btn calendar-view-tab" +
+      (state.calendarView === "mine" ? " active" : "") +
+      "' data-cal-view='mine' role='tab' aria-selected='" +
+      (state.calendarView === "mine" ? "true" : "false") +
+      "'>My calendar</button>";
+    html += "</div>";
+    html +=
+      "<button type='button' class='vox-btn' data-cal-prev='1' aria-label='Previous month'" +
       prevDisabled +
       ">&larr;</button>";
     html += "<span class='cal-title'>" + escapeHtml(label) + "</span>";
     html +=
-      "<button type='button' class='btn-ghost' data-cal-next='1' aria-label='Next month'" +
+      "<button type='button' class='vox-btn' data-cal-next='1' aria-label='Next month'" +
       nextDisabled +
       ">&rarr;</button>";
     html +=
-      "<label class='cal-region-label'>Region <select id='cal-region' aria-label='Region filter'>";
+      "<label class='cal-region-label'>Region <select id='cal-region' class='vox-select' aria-label='Region filter'>";
     ["all", "americas", "emea", "apac", "mea"].forEach(function (r) {
       html +=
         "<option value='" +
@@ -1177,7 +1284,7 @@
     html += "</select></label></div>";
     html +=
       "<div class='cal-weekdays'><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>";
-    html += "<div class='cal-grid'>";
+    html += "<div class='vox-calendar-grid cal-grid'>";
     var cellCount = 0;
     var i;
     for (i = 0; i < firstIdx; i++) {
@@ -1189,7 +1296,7 @@
       var evs = byDay[key] || [];
       var bd = badgeForDay(key);
       var hasEvents = evs.length > 0;
-      var cls = "cal-cell";
+      var cls = "vox-calendar-day cal-cell";
       if (hasEvents) cls += " cal-cell--busy";
       if (state.calendarSelectedKey === key) cls += " cal-cell--selected";
       html +=
@@ -1207,8 +1314,13 @@
         html += "<span class='cal-dot cal-dot--interest' title='Interested'></span>";
       }
       if (bd && bd.participated) {
-        html +=
-          "<span class='cal-logo-wrap' title='Participating'><img src='/assets/logo-white.svg' alt='' width='14' height='14' class='cal-logo-mark'/></span>";
+        html += "<span class='cal-dot cal-dot--registered' title='Registered'></span>";
+      }
+      if (bd && bd.rsvpGoing) {
+        html += "<span class='cal-dot cal-dot--rsvp' title='RSVP Going'></span>";
+      }
+      if (bd && bd.rsvpMaybe) {
+        html += "<span class='cal-dot cal-dot--rsvp-maybe' title='RSVP Maybe'></span>";
       }
       if (hasEvents) {
         html += "<span class='cal-dot-count'>" + evs.length + "</span>";
@@ -1226,16 +1338,38 @@
     }
     html += "</div>";
     html +=
-      "<p class='cal-summary'>Total events created so far: <strong>" +
-      String(state.calendarTotalEvents || 0) +
-      "</strong></p>";
+      "<p class='cal-summary'>" +
+      (state.calendarView === "mine"
+        ? state.calendarItems.length
+          ? "Showing " + state.calendarItems.length + " of your events this month."
+          : "No saved, registered, or RSVP events this month. Try another month or switch to All events."
+        : "Total events created so far: <strong>" + String(state.calendarTotalEvents || 0) + "</strong>") +
+      "</p>";
+    html +=
+      "<p class='cal-legend muted'>" +
+      "<span class='cal-legend-item'><span class='cal-dot cal-dot--interest'></span> Interested</span> " +
+      "<span class='cal-legend-item'><span class='cal-dot cal-dot--registered'></span> Registered</span> " +
+      "<span class='cal-legend-item'><span class='cal-dot cal-dot--rsvp'></span> Going</span> " +
+      "<span class='cal-legend-item'><span class='cal-dot cal-dot--rsvp-maybe'></span> Maybe</span>" +
+      "</p></div>";
     strip.innerHTML = html;
     updateFooterSpacesCount();
   }
 
+  function formatCalendarDayEvMeta(ev) {
+    var when = formatEventWhen(ev.startsAt, ev.endsAt);
+    var place =
+      ev.mode === "online"
+        ? "Online"
+        : String(ev.location || "").trim();
+    if (place && place.length > 48) place = place.slice(0, 45) + "…";
+    return place ? when + " · " + place : when;
+  }
+
   function openCalendarDayPanel() {
     var panel = $("#calendar-day-panel");
-    if (!panel || !state.calendarSelectedKey) return;
+    var body = panel ? panel.querySelector(".calendar-day-panel-body") : null;
+    if (!panel || !body || !state.calendarSelectedKey) return;
     var key = state.calendarSelectedKey;
     var evs = (state.calendarItems || []).filter(function (ev) {
       return utcDayKey(ev.startsAt) === key;
@@ -1243,35 +1377,46 @@
     var lines = evs
       .map(function (ev) {
         return (
-          "<article class='cal-day-ev'><h4>" +
+          "<article class='cal-day-ev'>" +
+          "<a class='cal-day-ev__title' href='#/event/" + escapeHtml(ev.id) + "'>" +
           escapeHtml(ev.title) +
-          "</h4><p class='muted'>" +
-          escapeHtml(formatEventWhen(ev.startsAt, ev.endsAt)) +
-          "</p><p class='muted'>" +
-          escapeHtml(ev.location) +
-          "</p><div class='row'>" +
-          "<button type='button' class='btn-ghost' data-cal-interest='" +
-          escapeHtml(ev.id) +
-          "'>Interested</button>" +
-          "<button type='button' class='btn-danger' data-cal-uninterest='" +
-          escapeHtml(ev.id) +
-          "'>Not interested</button>" +
-          "<button type='button' class='btn-ghost' data-cal-contribute='" +
-          escapeHtml(ev.id) +
-          "'>Contribute</button>" +
-          "<a class='btn-primary' href='#/event/" +
-          escapeHtml(ev.id) +
-          "'>Details</a></div></article>"
+          "</a>" +
+          calendarMineTags(ev.id) +
+          "<p class='cal-day-ev__meta muted'>" + escapeHtml(formatCalendarDayEvMeta(ev)) + "</p>" +
+          "<div class='cal-day-ev__actions'>" +
+          "<a class='vox-btn vox-btn-primary vox-btn-sm' href='#/event/" + escapeHtml(ev.id) + "'>View event</a>" +
+          "<div class='vox-hbox cal-day-ev__secondary'>" +
+          "<button type='button' class='vox-btn vox-btn-sm' data-cal-interest='" + escapeHtml(ev.id) + "'>Interested</button>" +
+          "<button type='button' class='vox-btn vox-btn-sm' data-cal-contribute='" + escapeHtml(ev.id) + "'>Contribute</button>" +
+          "<button type='button' class='vox-btn vox-btn-sm' data-cal-uninterest='" + escapeHtml(ev.id) + "'>Pass</button>" +
+          "</div></div></article>"
         );
       })
       .join("");
-    panel.innerHTML =
-      "<h3 class='cal-panel-title'>" +
+    body.innerHTML =
+      "<header class='cal-panel-head'>" +
+      "<h3 class='cal-panel-title vox-heading'>" +
       escapeHtml(formatEventDate(key + "T00:00:00Z", { timeZone: "UTC" })) +
-      " (UTC)</h3>" +
-      (lines || "<p class='muted'>No events this UTC day.</p>") +
-      "<p><button type='button' class='btn-ghost' data-cal-panel-close='1'>Close</button></p>";
-    panel.classList.remove("hidden");
+      "</h3>" +
+      "<p class='cal-panel-sub muted'>" + evs.length + " event" + (evs.length === 1 ? "" : "s") + " · UTC</p>" +
+      "</header>" +
+      "<div class='cal-day-list'>" +
+      (lines || "<p class='muted cal-day-empty'>No events this day.</p>") +
+      "</div>";
+    panel.classList.remove("calendar-day-panel--empty");
+  }
+
+  function renderCalendarDayPanelPlaceholder() {
+    var panel = $("#calendar-day-panel");
+    var body = panel ? panel.querySelector(".calendar-day-panel-body") : null;
+    if (!panel || !body) return;
+    body.innerHTML =
+      "<header class='cal-panel-head'>" +
+      "<h3 class='cal-panel-title vox-heading'>Pick a day</h3>" +
+      "<p class='cal-panel-sub muted'>Select a date on the calendar.</p>" +
+      "</header>" +
+      "<p class='muted cal-day-empty'>Events for that UTC day appear here.</p>";
+    panel.classList.add("calendar-day-panel--empty");
   }
 
   function refreshCalendarStrip() {
@@ -1296,14 +1441,35 @@
       .then(function (all) {
         var data = all[0] || {};
         var stats = all[1] || {};
-        state.calendarItems = data.items || [];
+        state.calendarItemsAll = data.items || [];
+        state.calendarItems = state.calendarItemsAll.slice();
         state.calendarTotalEvents = Number(stats.totalEvents || 0);
       })
       .then(function () {
+        if (state.calendarView === "mine") {
+          if (!state.user) {
+            state.calendarItems = [];
+            state.calendarEventMeta = {};
+            state.calendarBadges = [];
+            return;
+          }
+          return api("/api/me").then(function (me) {
+            var mine = buildCalendarMineData(me);
+            state.calendarEventMeta = mine.meta;
+            state.calendarItems = filterCalendarItemsToMonth(mine.items, y, m);
+          });
+        }
+        state.calendarEventMeta = {};
         if (!state.user) {
           state.calendarBadges = [];
           return;
         }
+        return api("/api/me/calendar-badges").then(function (bd) {
+          state.calendarBadges = (bd && bd.badges) || [];
+        });
+      })
+      .then(function () {
+        if (state.calendarView !== "mine" || !state.user) return;
         return api("/api/me/calendar-badges").then(function (bd) {
           state.calendarBadges = (bd && bd.badges) || [];
         });
@@ -1315,6 +1481,9 @@
       })
       .then(function () {
         renderCalendarStripDom();
+        if ($("#calendar-day-panel") && state.calendarSelectedKey) {
+          openCalendarDayPanel();
+        }
       });
   }
 
@@ -1324,13 +1493,26 @@
     wrap.dataset.calendarInit = "1";
     wrap.addEventListener("click", function (e) {
       var raw = e.target;
-      var t = raw instanceof HTMLElement ? raw.closest("[data-cal-prev],[data-cal-next],[data-cal-day],[data-cal-interest],[data-cal-uninterest],[data-cal-contribute],[data-cal-panel-close]") : null;
+      var t = raw instanceof HTMLElement ? raw.closest("[data-cal-prev],[data-cal-next],[data-cal-day],[data-cal-interest],[data-cal-uninterest],[data-cal-contribute],[data-cal-view]") : null;
       if (!(t instanceof HTMLElement)) return;
-      if (t.hasAttribute("data-cal-panel-close")) {
+      if (t.hasAttribute("data-cal-view")) {
         e.preventDefault();
-        $("#calendar-day-panel").classList.add("hidden");
+        var nextView = t.getAttribute("data-cal-view") === "mine" ? "mine" : "all";
+        if (nextView === "mine" && !state.user) {
+          openLoginModal(function () {
+            state.calendarView = "mine";
+            syncCalendarViewHash("mine");
+            refreshCalendarStrip();
+          });
+          return;
+        }
+        if (nextView === state.calendarView) return;
+        state.calendarView = nextView;
         state.calendarSelectedKey = null;
-        renderCalendarStripDom();
+        syncCalendarViewHash(nextView);
+        refreshCalendarStrip().then(function () {
+          renderCalendarDayPanelPlaceholder();
+        });
         return;
       }
       if (t.hasAttribute("data-cal-prev") && !t.disabled) {
@@ -1478,6 +1660,8 @@
       } else {
         p = renderCheckinDesk();
       }
+    } else if (section === "calendar") {
+      p = renderCalendarPage();
     } else if (section === "about") {
       if ($("#about-guide-nav")) {
         mountAboutGuide(parseHashQuery().guide || "overview");
@@ -1490,7 +1674,6 @@
     } else {
       p = renderHome();
     }
-    closeCalendarDrawer();
     return Promise.resolve(p);
   }
 
@@ -1506,6 +1689,7 @@
       state.flash = "";
     }
     $("#app").innerHTML = flashHtml + content;
+    applyVoxFormClasses($("#app"));
   }
 
   function escapeHtml(s) {
@@ -1514,6 +1698,200 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function shareIconSvg(kind) {
+    var wrap = function (path) {
+      return (
+        '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">' +
+        path +
+        "</svg>"
+      );
+    };
+    var icons = {
+      x: wrap(
+        '<path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>'
+      ),
+      linkedin: wrap(
+        '<path fill="currentColor" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 114.126 0 2.063 2.063 0 01-2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452z"/>'
+      ),
+      facebook: wrap(
+        '<path fill="currentColor" d="M13.5 22v-8h2.75l.42-3.25H13.5V9.01c0-.94.26-1.58 1.61-1.58H17V4.64C16.66 4.6 15.55 4.5 14.27 4.5 11.55 4.5 9.75 6.12 9.75 8.7V10.75H7v3.25h2.75V22h3.75z"/>'
+      ),
+      whatsapp: wrap(
+        '<path fill="currentColor" d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.33 4.95L2 22l5.3-1.39a10 10 0 004.74 1.2h.01c5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2zm0 18.08h-.01a8.07 8.07 0 01-4.12-1.13l-.3-.17-3.14.82.84-3.06-.19-.31a8.08 8.08 0 111.92 4.85zm4.46-6.05c-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.54.12-.16.24-.62.79-.76.95-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.02-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.09 3.62.57.25 1.02.4 1.37.51.58.18 1.11.16 1.53.1.47-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28z"/>'
+      ),
+      email: wrap(
+        '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16v11H4V7zm0 0 8 5.5L20 7"/>'
+      ),
+      share: wrap(
+        '<path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92"/>'
+      ),
+      link: wrap(
+        '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M10 8H6a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-4M14 4h6v6M10 14 20 4"/>'
+      ),
+      ics: wrap(
+        '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M8 4V2m8 2V2M4 9h16M6 6h12a2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2zM12 13v4m-2-2h4"/>'
+      ),
+      google: wrap(
+        '<rect fill="none" stroke="currentColor" stroke-width="1.5" x="4" y="5" width="16" height="15" rx="2"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M8 3v4m8-4v4M4 10h16"/><path fill="currentColor" d="M8.5 14h2v2h-2zm5 0h2v2h-2zm-5 3.5h2v2h-2zm5 0h2v2h-2z"/>'
+      ),
+      outlook: wrap(
+        '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16v11H4V7zm0 0 8 5.5L20 7M8 13h8"/>'
+      ),
+    };
+    return icons[kind] || icons.link;
+  }
+
+  function eventShareTile(opts) {
+    opts = opts || {};
+    var cls =
+      "event-share-tile" + (opts.primary ? " event-share-tile--primary" : "");
+    var inner =
+      '<span class="event-share-tile__icon">' +
+      shareIconSvg(opts.icon) +
+      '</span><span class="event-share-tile__label">' +
+      escapeHtml(opts.label || "") +
+      "</span>";
+    if (opts.href) {
+      return (
+        "<a class='" +
+        cls +
+        "' href='" +
+        escapeHtml(opts.href) +
+        "'" +
+        (opts.target ? " target='" + opts.target + "'" : "") +
+        (opts.rel ? " rel='" + opts.rel + "'" : "") +
+        ">" +
+        inner +
+        "</a>"
+      );
+    }
+    return (
+      "<button type='button' class='" +
+      cls +
+      "'" +
+      (opts.id ? " id='" + escapeHtml(opts.id) + "'" : "") +
+      (opts.hidden ? " hidden" : "") +
+      ">" +
+      inner +
+      "</button>"
+    );
+  }
+
+  var RECENT_SEARCH_KEY = "eventmark_recent_searches";
+  var RECENT_SEARCH_MAX = 6;
+
+  function emptyStateHtml(opts) {
+    opts = opts || {};
+    return (
+      "<div class='vox-card empty-state'>" +
+      "<p class='vox-heading empty-state-title'>" +
+      escapeHtml(opts.title || "Nothing here yet") +
+      "</p>" +
+      "<p class='empty-state-body muted'>" +
+      escapeHtml(opts.body || "") +
+      "</p>" +
+      (opts.action ? "<p class='empty-state-action'>" + opts.action + "</p>" : "") +
+      "</div>"
+    );
+  }
+
+  function getRecentSearches() {
+    try {
+      var raw = localStorage.getItem(RECENT_SEARCH_KEY);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.filter(function (q) { return typeof q === "string" && q.trim(); }).slice(0, RECENT_SEARCH_MAX) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function rememberRecentSearch(query) {
+    var q = String(query || "").trim();
+    if (q.length < 2) return;
+    var list = getRecentSearches().filter(function (item) { return item.toLowerCase() !== q.toLowerCase(); });
+    list.unshift(q);
+    try {
+      localStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(list.slice(0, RECENT_SEARCH_MAX)));
+    } catch (e) {
+      /* ignore storage errors */
+    }
+  }
+
+  function renderRecentSearchesHtml() {
+    var list = getRecentSearches();
+    if (!list.length) return "";
+    return (
+      "<div class='recent-searches vox-hbox'>" +
+      "<span class='recent-searches-label muted'>Recent:</span> " +
+      list
+        .map(function (q) {
+          return (
+            "<button type='button' class='vox-badge recent-search-chip' data-recent-search='" +
+            escapeHtml(q) +
+            "'>" +
+            escapeHtml(q) +
+            "</button>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
+  function renderUpcomingStrip(events) {
+    var now = Date.now();
+    var upcoming = (events || [])
+      .filter(function (ev) {
+        return ev && ev.startsAt && new Date(ev.startsAt).getTime() > now;
+      })
+      .slice(0, 5);
+    if (!upcoming.length) return "";
+    return (
+      "<section class='upcoming-strip vox-vbox' aria-label='Upcoming events'>" +
+      "<div class='upcoming-strip-head vox-hbox'>" +
+      "<h3 class='vox-heading upcoming-strip-title'>Coming up</h3>" +
+      "<a class='content-link' href='#/calendar'>Full calendar →</a>" +
+      "</div>" +
+      "<div class='vox-carousel upcoming-strip-track'>" +
+      upcoming
+        .map(function (ev) {
+          return (
+            "<a class='vox-card vox-carousel-card upcoming-chip' href='#/event/" +
+            escapeHtml(ev.id) +
+            "'>" +
+            "<span class='upcoming-chip-date'>" +
+            escapeHtml(formatEventShortDate(ev.startsAt, ev.endsAt)) +
+            "</span>" +
+            "<span class='upcoming-chip-title'>" +
+            escapeHtml(ev.title) +
+            "</span></a>"
+          );
+        })
+        .join("") +
+      "</div></section>"
+    );
+  }
+
+  function openTicketQrFullscreen(ticketCode, eventTitle) {
+    var code = String(ticketCode || "").trim();
+    if (!code) return;
+    openModal(
+      "<div class='qr-lightbox'>" +
+      "<h3>" +
+      escapeHtml(eventTitle || "Your ticket") +
+      "</h3>" +
+      "<p class='muted'>Show this QR code at the door. Screen brightness helps scanners read it faster.</p>" +
+      "<div class='qr-lightbox-frame'>" +
+      "<img class='qr-lightbox-img' alt='Ticket QR code' src='/api/tickets/" +
+      encodeURIComponent(code) +
+      "/qr.svg' />" +
+      "</div>" +
+      "<p class='qr-lightbox-code'><code>" +
+      escapeHtml(code) +
+      "</code></p></div>"
+    );
   }
 
   function isHttpUrl(value) {
@@ -1530,6 +1908,12 @@
   var PERSON_NAME_MAX = 26;
   var EVENT_DESCRIPTION_MAX_WORDS = 500;
   var BANNER_PX = 150;
+  var MAX_BANNER_BYTES = 69 * 1024;
+
+  function formatBannerSize(bytes) {
+    var kb = bytes / 1024;
+    return kb.toFixed(1) + " KB · max 69 KB · 150×150 px";
+  }
 
   function countWords(s) {
     var t = String(s || "").trim();
@@ -1629,7 +2013,13 @@
   }
 
   function aboutGuideLink(tab, label) {
-    return "<a href='#/about?guide=" + encodeURIComponent(tab) + "'>" + escapeHtml(label) + "</a>";
+    return (
+      "<a class='about-link' href='#/about?guide=" +
+      encodeURIComponent(tab) +
+      "'>" +
+      escapeHtml(label) +
+      "</a>"
+    );
   }
 
   function mountAboutGuide(initialTab) {
@@ -1683,7 +2073,7 @@
     var ticketToken = (query.token || "").trim();
     var checkinTs = { value: "" };
     layout(
-      "<section class='card'>" +
+      "<section class='vox-card card'>" +
         "<h2>EventMark ticket check-in</h2>" +
         "<p class='muted'>Scanning opens this page on EventMark. Present the QR to event staff at the door.</p>" +
         "<div id='checkin-panel' class='muted'>" +
@@ -1707,7 +2097,7 @@
           ? "<p><strong>Status:</strong> Already checked in" +
             (data.checkedInAt ? " at " + escapeHtml(formatEventDateTime(data.checkedInAt)) : "") +
             ".</p>"
-          : "<p><strong>Status:</strong> Valid ticket — not checked in yet.</p>";
+          : "<p><strong>Status:</strong> Valid ticket: not checked in yet.</p>";
         panel.innerHTML =
           "<p><strong>Event:</strong> " + escapeHtml(data.eventTitle || "Event") + "</p>" +
           statusHtml +
@@ -1719,7 +2109,7 @@
         actions.innerHTML =
           "<hr />" +
           "<p class='muted'>Event staff: complete the security check above, then check in this guest.</p>" +
-          "<button type='button' id='checkin-staff-btn' class='btn-primary'>Check in guest</button>" +
+          "<button type='button' id='checkin-staff-btn' class='vox-btn vox-btn-primary'>Check in guest</button>" +
           "<div id='checkin-staff-result' class='muted'></div>";
         var btn = $("#checkin-staff-btn");
         if (!btn) return;
@@ -1770,14 +2160,15 @@
   function renderCheckinDesk() {
     var deskTs = { value: "" };
     layout(
-      "<section class='card'>" +
-        "<h2>Check-in desk</h2>" +
+      "<section class='vox-card card'>" +
+        "<h2 class='vox-heading'>Check-in desk</h2>" +
         "<p class='muted'>Select your organization and event, then scan ticket QR codes or paste a check-in token.</p>" +
+        "<div class='vox-form vox-vbox vox-form-wide'>" +
         "<div class='field'><label>Organization</label><select id='desk-org'><option value=''>Loading…</option></select></div>" +
         "<div class='field'><label>Event</label><select id='desk-event'><option value=''>Select organization first</option></select></div>" +
         "<div id='ts-desk'></div>" +
         "<div class='field'><label>Check-in token</label><input id='desk-token' placeholder='Paste token or scan ticket QR' /></div>" +
-        "<button type='button' id='desk-checkin-btn' class='btn-primary'>Check in guest</button>" +
+        "<button type='button' id='desk-checkin-btn' class='vox-btn vox-btn-primary'>Check in guest</button>" +
         "<div id='desk-checkin-result' class='muted'></div>" +
         "<div class='suite-scanner card'>" +
         "<h4>Camera QR scanner</h4>" +
@@ -1785,12 +2176,13 @@
         "<div id='desk-scan-permission' class='muted'>Camera permission not requested yet.</div>" +
         "<video id='desk-scan-video' playsinline muted autoplay></video>" +
         "<canvas id='desk-scan-canvas' hidden aria-hidden='true'></canvas>" +
-        "<div class='row'>" +
-        "<button type='button' id='desk-scan-permission-btn' class='btn-ghost'>Allow camera access</button>" +
-        "<button type='button' id='desk-scan-start' class='btn-primary' disabled>Start scanner</button>" +
-        "<button type='button' id='desk-scan-stop' class='btn-ghost'>Stop camera</button>" +
+        "<div class='vox-hbox row'>" +
+        "<button type='button' id='desk-scan-permission-btn' class='vox-btn'>Allow camera access</button>" +
+        "<button type='button' id='desk-scan-start' class='vox-btn vox-btn-primary' disabled>Start scanner</button>" +
+        "<button type='button' id='desk-scan-stop' class='vox-btn'>Stop camera</button>" +
         "</div>" +
         "<div id='desk-scan-status' class='muted'>Request camera permission to begin scanning.</div>" +
+        "</div>" +
         "</div>" +
         "</section>"
     );
@@ -2165,61 +2557,75 @@
     var query = parseHashQuery();
     var initialTab = query.guide || "overview";
     var html =
-      "<div class='about-page'>" +
-      "<h2>About EventMark</h2>" +
-      "<p>EventMark is an open platform to discover and join community and opensource events. Sign in with email — no password — and keep tickets, links, and your calendar in one place.</p>" +
-      "<p class='muted'>Use the guide tabs below to learn what each button does, how online and in-person events differ, and how to apply as an organization.</p>" +
-      "<nav id='about-guide-nav' class='about-guide-nav dashboard-tabs' role='tablist' aria-label='Help and guide'>" +
-      "<button type='button' class='dash-tab' data-about-guide-tab='overview' role='tab'>Overview</button>" +
-      "<button type='button' class='dash-tab' data-about-guide-tab='attend' role='tab'>Attending</button>" +
-      "<button type='button' class='dash-tab' data-about-guide-tab='events' role='tab'>Event types</button>" +
-      "<button type='button' class='dash-tab' data-about-guide-tab='organizers' role='tab'>Organizers</button>" +
-      "<button type='button' class='dash-tab' data-about-guide-tab='checkin' role='tab'>Check-in</button>" +
+      "<div class='about-page page-main vox-vbox'>" +
+      "<header class='page-header'>" +
+      "<h1 class='vox-heading'>About EventMark</h1>" +
+      "</header>" +
+      "<div class='vox-card content-block'>" +
+      "<div class='vox-demo-title content-block-header'>about</div>" +
+      "<div class='content-block-body'>" +
+      "<p><em>Opensource events. Open participation.</em></p>" +
+      "<p>EventMark is an open platform to discover and join community and opensource events. The experience is intentionally simple: open the site, find a relevant event, sign in with your email, and participate.</p>" +
+      "<p><strong>Core principle:</strong> EventMark stays focused on opensource, community, and mission driven events first.</p>" +
+      "<p>We designed EventMark to support both participants and organizers with a clear, practical workflow. Participants can discover events, save interest, register, and keep access details in one place. Organizers can apply, create draft events, publish when ready, and manage invitations, passes, and check-in operations.</p>" +
+      "<p>EventMark is built with a privacy minded and transparent approach. Passwordless sign in, abuse protection, and role based access are part of the foundation so communities can run reliable events without unnecessary complexity.</p>" +
+      "</div></div>" +
+      "<div class='content-block about-guide-shell'>" +
+      "<div class='vox-demo-title content-block-header'>guide</div>" +
+      "<div class='content-block-body'>" +
+      "<p class='about-guide-lead'>Use the tabs below to learn what each button does, how online and in-person events differ, and how to apply as an organization.</p>" +
+      "<nav id='about-guide-nav' class='vox-bar about-guide-nav' role='tablist' aria-label='Help and guide'>" +
+      "<button type='button' class='vox-btn about-guide-tab' data-about-guide-tab='overview' role='tab'>Overview</button>" +
+      "<button type='button' class='vox-btn about-guide-tab' data-about-guide-tab='attend' role='tab'>Attending</button>" +
+      "<button type='button' class='vox-btn about-guide-tab' data-about-guide-tab='events' role='tab'>Event types</button>" +
+      "<button type='button' class='vox-btn about-guide-tab' data-about-guide-tab='organizers' role='tab'>Organizers</button>" +
+      "<button type='button' class='vox-btn about-guide-tab' data-about-guide-tab='checkin' role='tab'>Check-in</button>" +
       "</nav>" +
       "<div class='about-guide-panels'>" +
-      "<section class='about-guide-panel card' data-about-guide-panel='overview'>" +
-      "<h3>Roles at a glance</h3>" +
-      "<ul class='hemw-steps'>" +
-      "<li><strong>Guest</strong> — browse and search events without signing in.</li>" +
-      "<li><strong>Participant</strong> — sign in, save interest, register, RSVP, and view tickets or join links on your dashboard.</li>" +
-      "<li><strong>Organizer</strong> — apply as an approved organization, create draft events, publish, invite people, and run check-in.</li>" +
-      "<li><strong>Check-in staff</strong> — assigned by an organizer; scan QR codes at the door with their own login (no shared password).</li>" +
-      "<li><strong>Platform admin</strong> — reviews organizer applications and site settings (separate admin portal).</li>" +
+      "<section class='about-guide-panel' data-about-guide-panel='overview'>" +
+      "<h3 class='about-panel-title'>How it works by actors and roles</h3>" +
+      "<ul class='content-list'>" +
+      "<li><span class='li-num'>01</span><div class='li-text'><strong>Guest</strong><span>Browse events, search, and review details before signing in.</span></div></li>" +
+      "<li><span class='li-num'>02</span><div class='li-text'><strong>Participant</strong><span>Sign in with email, save interest, register, and access links or ticket details from dashboard.</span></div></li>" +
+      "<li><span class='li-num'>03</span><div class='li-text'><strong>Organizer</strong><span>Apply for approval, create draft events, publish events, manage invites, passes, sessions, and check-in operations.</span></div></li>" +
+      "<li><span class='li-num'>04</span><div class='li-text'><strong>Admin</strong><span>Review organizer requests, manage platform settings, and control branding and governance rules.</span></div></li>" +
+      "<li><span class='li-num'>05</span><div class='li-text'><strong>Check-in staff</strong><span>Scan or paste pass token, verify attendee, and complete entry at venue desk.</span></div></li>" +
       "</ul>" +
-      "<p>Jump to: " + aboutGuideLink("attend", "Attending & buttons") + " · " +
+      "<p class='about-jump-links'>Jump to: " +
+      aboutGuideLink("attend", "Attending & buttons") + " · " +
       aboutGuideLink("events", "Native vs external events") + " · " +
       aboutGuideLink("organizers", "Apply & create events") + " · " +
-      aboutGuideLink("checkin", "QR check-in") + "</p>" +
-      "</section>" +
-      "<section class='about-guide-panel card' data-about-guide-panel='attend'>" +
-      "<h3>Register, Interested, and Going / Maybe / Not going</h3>" +
+      aboutGuideLink("checkin", "QR check-in") +
+      "</p></section>" +
+      "<section class='about-guide-panel' data-about-guide-panel='attend'>" +
+      "<h3 class='about-panel-title'>Register, Interested, and Going / Maybe / Not going</h3>" +
       "<p>On an event page under <strong>Attend</strong> you will see three different tools. They are <em>not</em> the same thing.</p>" +
-      "<div class='guide-table-wrap'><table class='guide-table'>" +
+      "<div class='vox-table-wrapper guide-table-wrap'><table class='vox-table guide-table'>" +
       "<thead><tr><th>Button</th><th>What it does</th><th>Ticket / QR</th><th>Email</th></tr></thead>" +
       "<tbody>" +
-      "<tr><td data-label='Button'><span class='guide-btn-name'>Interested</span></td><td data-label='What it does'>Bookmark the event on your dashboard and calendar. Good when you are curious but not ready to commit.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--muted'>None</span></td></tr>" +
-      "<tr class='guide-table-row--primary'><td data-label='Button'><span class='guide-btn-name'>Register</span></td><td data-label='What it does'>Official signup on EventMark. Reserves a seat when the event has a capacity limit. For in-person native events you receive a ticket code and QR by email.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--yes'>Yes</span></td><td data-label='Email'><span class='guide-pill guide-pill--yes'>QR email</span></td></tr>" +
-      "<tr><td data-label='Button'><span class='guide-btn-name'>Going</span></td><td data-label='What it does'>RSVP intent — “I plan to be there.” Used for counts and organizer reminders.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--muted'>Reminder</span></td></tr>" +
-      "<tr><td data-label='Button'><span class='guide-btn-name'>Maybe</span></td><td data-label='What it does'>RSVP — you might attend. No ticket is created.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--no'>No</span></td></tr>" +
-      "<tr><td data-label='Button'><span class='guide-btn-name'>Not going</span></td><td data-label='What it does'>RSVP — you will not attend. Helps organizers plan headcount.</td><td data-label='Ticket / QR'><span class='guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='guide-pill guide-pill--no'>No</span></td></tr>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Interested</span></td><td data-label='What it does'>Bookmark the event on your dashboard and calendar. Good when you are curious but not ready to commit.</td><td data-label='Ticket / QR'><span class='vox-badge guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='vox-badge guide-pill guide-pill--muted'>None</span></td></tr>" +
+      "<tr class='guide-table-row--primary'><td data-label='Button'><span class='guide-btn-name'>Register</span></td><td data-label='What it does'>Official signup on EventMark. Reserves a seat when the event has a capacity limit. For in-person native events you receive a ticket code and QR by email.</td><td data-label='Ticket / QR'><span class='vox-badge guide-pill guide-pill--yes'>Yes</span></td><td data-label='Email'><span class='vox-badge guide-pill guide-pill--yes'>QR email</span></td></tr>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Going</span></td><td data-label='What it does'>RSVP intent: “I plan to be there.” Used for counts and organizer reminders.</td><td data-label='Ticket / QR'><span class='vox-badge guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='vox-badge guide-pill guide-pill--muted'>Reminder</span></td></tr>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Maybe</span></td><td data-label='What it does'>RSVP: you might attend. No ticket is created.</td><td data-label='Ticket / QR'><span class='vox-badge guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='vox-badge guide-pill guide-pill--no'>No</span></td></tr>" +
+      "<tr><td data-label='Button'><span class='guide-btn-name'>Not going</span></td><td data-label='What it does'>RSVP: you will not attend. Helps organizers plan headcount.</td><td data-label='Ticket / QR'><span class='vox-badge guide-pill guide-pill--no'>No</span></td><td data-label='Email'><span class='vox-badge guide-pill guide-pill--no'>No</span></td></tr>" +
       "</tbody></table></div>" +
       "<div class='guide-callout'><strong>Important:</strong> Marking <strong>Going</strong> does <em>not</em> give you a QR code. For door check-in at in-person events you must <strong>Register</strong> and use the ticket from your dashboard or email.</div>" +
-      "<h4>Typical paths</h4>" +
+      "<h4 class='about-subhead'>Typical paths</h4>" +
       "<ol class='hemw-steps'>" +
-      "<li><strong>Just exploring</strong> — click <strong>Interested</strong>. The date appears on your dashboard and calendar strip.</li>" +
-      "<li><strong>Ready to attend (in person)</strong> — click <strong>Register</strong>, complete the quick check, receive QR ticket by email, show QR at the door.</li>" +
-      "<li><strong>Ready to attend (online)</strong> — click <strong>Register</strong>. After signup, open <strong>Dashboard → Registrations</strong> for the join link (no QR needed).</li>" +
-      "<li><strong>After you register</strong> — optionally set <strong>Going / Maybe / Not going</strong> so organizers know your intent (optional; separate from registration).</li>" +
+      "<li><strong>Just exploring</strong>: click <strong>Interested</strong>. The date appears on your dashboard and calendar strip.</li>" +
+      "<li><strong>Ready to attend (in person)</strong>: click <strong>Register</strong>, complete the quick check, receive QR ticket by email, show QR at the door.</li>" +
+      "<li><strong>Ready to attend (online)</strong>: click <strong>Register</strong>. After signup, open <strong>Dashboard → Registrations</strong> for the join link (no QR needed).</li>" +
+      "<li><strong>After you register</strong>: optionally set <strong>Going / Maybe / Not going</strong> so organizers know your intent (optional; separate from registration).</li>" +
       "</ol>" +
       "<p class='muted'>Your dashboard has separate tabs: Interested, Registrations (tickets/links), and RSVP status.</p>" +
       "</section>" +
-      "<section class='about-guide-panel card' data-about-guide-panel='events'>" +
-      "<h3>Native, external, online, in-person, and hybrid</h3>" +
-      "<div class='guide-table-wrap'><table class='guide-table'>" +
+      "<section class='about-guide-panel' data-about-guide-panel='events'>" +
+      "<h3 class='about-panel-title'>Native, external, online, in-person, and hybrid</h3>" +
+      "<div class='vox-table-wrapper guide-table-wrap'><table class='vox-table guide-table'>" +
       "<thead><tr><th>Event kind</th><th>What participants see</th><th>Registration</th></tr></thead>" +
       "<tbody>" +
-      "<tr class='guide-table-row--primary'><td data-label='Event kind'><span class='guide-btn-name'>Native (EventMark)</span></td><td data-label='What participants see'>Register and Interested buttons on EventMark. Organizers manage list, tickets, and check-in here.</td><td data-label='Registration'>On EventMark — ticket or waitlist</td></tr>" +
-      "<tr><td data-label='Event kind'><span class='guide-btn-name'>External registration</span></td><td data-label='What participants see'>“Register on organizer site” link instead of EventMark Register. Signups happen on the organizer’s own page.</td><td data-label='Registration'>Off-site — EventMark only tracks interest if you click Interested</td></tr>" +
+      "<tr class='guide-table-row--primary'><td data-label='Event kind'><span class='guide-btn-name'>Native (EventMark)</span></td><td data-label='What participants see'>Register and Interested buttons on EventMark. Organizers manage list, tickets, and check-in here.</td><td data-label='Registration'>On EventMark: ticket or waitlist</td></tr>" +
+      "<tr><td data-label='Event kind'><span class='guide-btn-name'>External registration</span></td><td data-label='What participants see'>“Register on organizer site” link instead of EventMark Register. Signups happen on the organizer’s own page.</td><td data-label='Registration'>Off-site: EventMark only tracks interest if you click Interested</td></tr>" +
       "<tr><td data-label='Event kind'><span class='guide-btn-name'>In person</span></td><td data-label='What participants see'>Location/venue shown. After native registration: QR ticket for door check-in.</td><td data-label='Registration'>QR ticket email + dashboard</td></tr>" +
       "<tr><td data-label='Event kind'><span class='guide-btn-name'>Online</span></td><td data-label='What participants see'>Join link stored by organizer. After registration: link appears on your dashboard (not a QR ticket).</td><td data-label='Registration'>Dashboard join link</td></tr>" +
       "<tr><td data-label='Event kind'><span class='guide-btn-name'>Hybrid</span></td><td data-label='What participants see'>Both venue and online join link. Register on EventMark; in-person attendees get QR, online attendees use the link.</td><td data-label='Registration'>QR + join link as applicable</td></tr>" +
@@ -2227,81 +2633,142 @@
       "<div class='guide-callout'><strong>Waitlist:</strong> If an event is full, native registration adds you to a waitlist. When a seat opens, EventMark can promote you and send your ticket automatically.</div>" +
       "<p>Organizers choose format and external vs native when " + aboutGuideLink("organizers", "creating an event") + ".</p>" +
       "</section>" +
-      "<section class='about-guide-panel card' data-about-guide-panel='organizers'>" +
-      "<h3>Apply as an organization and create events</h3>" +
+      "<section class='about-guide-panel' data-about-guide-panel='organizers'>" +
+      "<h3 class='about-panel-title'>Apply as an organization and create events</h3>" +
       "<ol class='hemw-steps'>" +
       "<li><strong>Sign in</strong> with your email (passwordless OTP).</li>" +
-      "<li><strong>Organize → Apply</strong> — submit your organization/entity: name, website, description, directors, motto, and whether you run in-person, online, or hybrid events.</li>" +
-      "<li><strong>Verify email</strong> — enter the one-time org-request code sent to your inbox.</li>" +
-      "<li><strong>Admin review</strong> — EventMark admins approve, reject, or ask for more information. When approved, your account is linked to the organization.</li>" +
-      "<li><strong>Create draft events</strong> — under Organize: title, banner, description, location, seats (min/max), format, speakers, native vs external registration, optional website link.</li>" +
-      "<li><strong>Publish</strong> — draft events are private until published; then they appear on Discover and the calendar.</li>" +
-      "<li><strong>Invitation suite</strong> — invites, email campaigns, analytics, venue layout, and assign " + aboutGuideLink("checkin", "check-in staff") + " by email.</li>" +
+      "<li><strong>Organize → Apply</strong>: submit your organization/entity: name, website, description, directors, motto, and whether you run in-person, online, or hybrid events.</li>" +
+      "<li><strong>Verify email</strong>: enter the one-time org-request code sent to your inbox.</li>" +
+      "<li><strong>Admin review</strong>: EventMark admins approve, reject, or ask for more information. When approved, your account is linked to the organization.</li>" +
+      "<li><strong>Create draft events</strong>: under Organize: title, banner, description, location, seats (min/max), format, speakers, native vs external registration, optional website link.</li>" +
+      "<li><strong>Publish</strong>: draft events are private until published; then they appear on Discover and the calendar.</li>" +
+      "<li><strong>Invitation suite</strong>: invites, email campaigns, analytics, venue layout, and assign " + aboutGuideLink("checkin", "check-in staff") + " by email.</li>" +
       "</ol>" +
-      "<h4>Draft vs published</h4>" +
+      "<h4 class='about-subhead'>Draft vs published</h4>" +
       "<p>Only <strong>drafts that have never been published</strong> can be fully edited. After the first publish, some fields are locked to protect attendees who already registered.</p>" +
-      "<p class='muted'>Start from the top menu: <a href='#/organize'>Organize</a></p>" +
+      "<p class='muted'>Start from the top menu: <a class='about-link' href='#/organize'>Organize</a></p>" +
       "</section>" +
-      "<section class='about-guide-panel card' data-about-guide-panel='checkin'>" +
-      "<h3>QR tickets and door check-in</h3>" +
+      "<section class='about-guide-panel' data-about-guide-panel='checkin'>" +
+      "<h3 class='about-panel-title'>QR tickets and door check-in</h3>" +
       "<ol class='hemw-steps'>" +
       "<li>Participant <strong>registers</strong> on a native in-person event.</li>" +
       "<li>EventMark emails a <strong>QR ticket</strong> and shows the same code on the participant dashboard.</li>" +
       "<li>At the door, staff open <strong>Check-in desk</strong> (or Organize → Check-in for org members).</li>" +
-      "<li>Staff scan the QR or paste the token — guest is checked in once (duplicate scans are blocked).</li>" +
+      "<li>Staff scan the QR or paste the token: guest is checked in once (duplicate scans are blocked).</li>" +
       "</ol>" +
       "<p>Organizers add volunteers under <strong>Organize → Check-in staff</strong>. Each person signs in with their own email; they never need the organizer’s password.</p>" +
-      "<p class='muted'>RSVP “Going” alone is not valid at the door — only a registered ticket QR works for native in-person events.</p>" +
+      "<p class='muted'>RSVP “Going” alone is not valid at the door: only a registered ticket QR works for native in-person events.</p>" +
       "</section>" +
+      "</div></div></div>" +
+      "<div class='vox-card content-block'>" +
+      "<div class='vox-demo-title content-block-header'>who builds it</div>" +
+      "<div class='content-block-body'>" +
+      "<p>EventMark is built with care by contributors and maintainers who believe open communities deserve dependable event infrastructure. It is an initiative product launch by voxon.org&reg;. " +
+      '<a class="about-link" href="https://github.com/voxondotorg/eventmark.org" rel="noopener noreferrer" target="_blank">Contribute on GitHub</a>.</p>' +
+      "</div></div>" +
+      "<div class='vox-card content-block'>" +
+      "<div class='vox-demo-title content-block-header'>opensource</div>" +
+      "<div class='content-block-body'>" +
+      "<p>EventMark is released under the <a class='about-link' href='/license'>MIT License</a>. Read full details on the license page.</p>" +
+      "<p>Ticket QR generation and scanning use additional opensource components. See <a class='about-link' href='/third-party'>third-party notices</a> for attributions.</p>" +
+      "<p class='muted'>Want to contribute? Open issues and pull requests on GitHub.</p>" +
+      "</div></div>" +
+      "<div class='vox-card vox-card-elevated cta-band'>" +
+      "<h2 class='vox-heading'>Ready to find your next event?</h2>" +
+      "<p>Discover opensource and community events: register when you are ready.</p>" +
+      "<a class='vox-btn vox-btn-primary about-cta-btn' href='#/'>Browse events <span class='about-cta-arrow' aria-hidden='true'>→</span></a>" +
       "</div>" +
-      "<h3>Who builds it</h3>" +
-      "<p>EventMark is built with care by contributors who believe open communities deserve dependable event infrastructure. " +
-      "It is an initiative product launch by voxon.org&reg;. " +
-      '<a href="https://github.com/voxondotorg/eventmark.org" rel="noopener noreferrer" target="_blank">Contribute on GitHub</a>.</p>' +
-      "<h3>Open source</h3>" +
-      "<p>Released under the <a href='/license'>MIT License</a>. QR components: <a href='/third-party'>third-party notices</a>.</p>" +
       "</div>";
     layout(html);
     mountAboutGuide(initialTab);
     return Promise.resolve();
   }
 
+  function renderCalendarPage() {
+    var q = parseHashQuery();
+    var wantMine = q.view === "mine";
+    if (wantMine && !state.user) {
+      openLoginModal(function () {
+        window.location.hash = "#/calendar?view=mine";
+        route();
+      });
+      wantMine = false;
+    }
+    state.calendarView = wantMine ? "mine" : "all";
+    var html =
+      "<div class='calendar-page vox-vbox'>" +
+      "<h2 class='vox-heading'>Calendar</h2>" +
+      "<p class='muted calendar-page-lead'>Browse published events by month, or switch to <strong>My calendar</strong> for events you saved, registered for, or RSVP'd.</p>" +
+      "<div class='calendar-page-layout'>" +
+      "<section class='vox-card vox-calendar card calendar-main-panel'>" +
+      "<div class='calendar-strip-wrap calendar-strip-wrap--page'>" +
+      "<div id='calendar-strip' class='calendar-strip'></div>" +
+      "</div></section>" +
+      "<aside id='calendar-day-panel' class='vox-card calendar-day-panel calendar-day-panel--page calendar-day-panel--empty' aria-live='polite'>" +
+      "<div class='calendar-day-panel-body'>" +
+      "<header class='cal-panel-head'>" +
+      "<h3 class='cal-panel-title vox-heading'>Pick a day</h3>" +
+      "<p class='cal-panel-sub muted'>Select a date on the calendar.</p>" +
+      "</header>" +
+      "<p class='muted cal-day-empty'>Events for that UTC day appear here.</p>" +
+      "</div></aside>" +
+      "</div></div>";
+    layout(html);
+    initCalendarStripOnce();
+    return refreshCalendarStrip();
+  }
+
 
   function paintHome() {
       var searchValue = escapeHtml(state.eventSearchQuery || "");
       var showClearSearch = state.eventSearchQuery && state.eventSearchQuery.trim().length >= 2;
-      var cards = state.events.map(renderEventCard).join("");
+      var isSearching = showClearSearch;
+      var cardsHtml =
+        state.events.length > 0
+          ? state.events.map(renderEventCard).join("")
+          : emptyStateHtml({
+              title: isSearching ? "No events match your search" : "No events to show yet",
+              body: isSearching
+                ? "Try different keywords, clear filters, or browse the calendar."
+                : "Check back soon: organizers publish opensource and community events here.",
+              action:
+                "<a class='content-link' href='#/calendar'>Browse calendar</a> · " +
+                "<a class='content-link' href='#/about?guide=organizers'>Run an event</a>",
+            });
+      var upcomingHtml = !isSearching ? renderUpcomingStrip(state.events) : "";
       layout(
-        "<section class='home-intro'>" +
-          "<h2>Discover events</h2>" +
-          "<p>Find opensource, funsource and community events you care about — save what looks good, sign up when you are ready.</p>" +
-          "<p class='muted'><a href='#/about?guide=attend'>Help: Register vs Interested vs RSVP</a> · " +
-          "<a href='#/about?guide=organizers'>Running events as an organization</a></p>" +
-          "<p class='home-intro-tools'><button type='button' id='btn-calendar-inline' class='btn-ghost'>Calendar</button></p>" +
-          "<div class='search-row'>" +
-          "<input type='search' id='event-search' class='search-input' placeholder='Search events...' value='" +
+        "<section class='home-intro vox-vbox'>" +
+          "<h2 class='vox-heading'>Discover events</h2>" +
+          "<p>Find opensource, funsource and community events you care about: save what looks good, sign up when you are ready.</p>" +
+          "<p class='muted guide-help-link'><a class='content-link' href='#/about?guide=attend'>Help: Register vs Interested vs RSVP</a> · " +
+          "<a class='content-link' href='#/about?guide=organizers'>Running events as an organization</a> · " +
+          "<a class='content-link' href='#/calendar'>Event calendar</a></p>" +
+          "<div class='vox-hbox search-row'>" +
+          "<input type='search' id='event-search' class='vox-input search-input' placeholder='Search events...' value='" +
           searchValue +
-          "' />" +
-          "<button type='button' id='btn-search' class='btn-ghost'>Search</button>" +
-          "<button type='button' id='btn-clear-search' class='btn-ghost" +
+          "' autocomplete='off' />" +
+          "<button type='button' id='btn-search' class='vox-btn'>Search</button>" +
+          "<button type='button' id='btn-clear-search' class='vox-btn" +
           (showClearSearch ? "" : " hidden") +
           "'>Clear</button>" +
           "</div>" +
+          renderRecentSearchesHtml() +
           "<details class='filter-details'><summary>Filters</summary>" +
-          "<div class='filter-row'>" +
-          "<label>Category <select id='filter-category'><option value=''>All</option><option value='open_source'>Open Source</option><option value='hybrid'>Hybrid</option></select></label>" +
-          "<label>Type <select id='filter-mode'><option value=''>All</option><option value='in_person'>In Person</option><option value='online'>Online</option><option value='hybrid'>Hybrid</option></select></label>" +
-          "<label>From <input type='date' id='filter-from' /></label>" +
-          "<label>To <input type='date' id='filter-to' /></label>" +
-          "<button type='button' id='btn-apply-filters' class='btn-primary'>Apply</button>" +
-          "<button type='button' id='btn-clear-filters' class='btn-ghost'>Clear</button>" +
+          "<div class='vox-bar filter-row'>" +
+          "<label>Category <select id='filter-category' class='vox-select'><option value=''>All</option><option value='open_source'>Opensource</option><option value='hybrid'>Hybrid</option></select></label>" +
+          "<label>Type <select id='filter-mode' class='vox-select'><option value=''>All</option><option value='in_person'>In Person</option><option value='online'>Online</option><option value='hybrid'>Hybrid</option></select></label>" +
+          "<label>From <input type='date' id='filter-from' class='vox-date-picker' /></label>" +
+          "<label>To <input type='date' id='filter-to' class='vox-date-picker' /></label>" +
+          "<button type='button' id='btn-apply-filters' class='vox-btn vox-btn-primary'>Apply</button>" +
+          "<button type='button' id='btn-clear-filters' class='vox-btn'>Clear</button>" +
           "</div></details>" +
           "</section>" +
-          '<div class="grid cards">' +
-          cards +
+          upcomingHtml +
+          '<div class="vox-grid grid cards">' +
+          cardsHtml +
           "</div>" +
           (state.eventsHasMore
-            ? '<p><button type="button" id="btn-more" class="btn-ghost">Load more</button></p>'
+            ? '<p><button type="button" id="btn-more" class="vox-btn">Load more</button></p>'
             : "")
       );
       // Attach search handlers
@@ -2309,18 +2776,6 @@
         var searchInput = $("#event-search");
         var searchBtn = $("#btn-search");
         var clearBtn = $("#btn-clear-search");
-        var inlineCalBtn = $("#btn-calendar-inline");
-        if (inlineCalBtn) {
-          inlineCalBtn.addEventListener("click", function () {
-            var d = $("#calendar-drawer");
-            if (!d) return;
-            if (d.classList.contains("open")) {
-              closeCalendarDrawer();
-            } else {
-              openCalendarDrawer();
-            }
-          });
-        }
         if (searchInput && searchBtn) {
           var debounceTimer = null;
           function doSearch() {
@@ -2335,6 +2790,7 @@
               });
             }
             state.eventSearchQuery = query;
+            rememberRecentSearch(query);
             searchBtn.textContent = "Searching…";
             return api("/api/events/search?q=" + encodeURIComponent(query) + "&limit=24")
               .then(function (data) {
@@ -2369,6 +2825,14 @@
               doSearch();
             });
           }
+          document.querySelectorAll("[data-recent-search]").forEach(function (chip) {
+            chip.addEventListener("click", function () {
+              var q = chip.getAttribute("data-recent-search") || "";
+              searchInput.value = q;
+              if (debounceTimer) clearTimeout(debounceTimer);
+              doSearch();
+            });
+          });
         }
         // Filter handlers
         var filterCategory = $("#filter-category");
@@ -2503,18 +2967,19 @@
       "</p>" +
       '<input type="hidden" id="cf-turnstile-contrib" />' +
       '<div id="ts-contrib"></div>' +
+      '<div class="vox-form vox-vbox">' +
       (registerOnly || isResubmit
         ? ""
-        : '<div class="field"><label>Role</label><select id="contrib-role">' +
+        : '<div class="field vox-vbox"><label class="vox-label">Role</label><select id="contrib-role" class="vox-select">' +
           '<option value="participant">Participant</option>' +
           '<option value="speaker">Speaker</option>' +
           '<option value="volunteer">Volunteer</option>' +
           '<option value="topic_proposer">Topic Proposer</option>' +
           "</select></div>") +
       '<div id="contrib-fields"></div>' +
-      '<button type="button" id="contrib-submit" class="btn-primary">' +
+      '<button type="button" id="contrib-submit" class="vox-btn vox-btn-primary">' +
       (isResubmit ? "Resubmit" : "Submit") +
-      "</button>";
+      "</button></div>";
     openModal(html);
     renderTurnstile("ts-contrib", tokenInput, function(ready) {
       var b = $("#contrib-submit");
@@ -2533,19 +2998,19 @@
         body = "<p class='muted'>Complete your registration to receive a ticket with QR code.</p>";
       } else if (role === "speaker") {
         body =
-          '<div class="field"><label>Topic Title *</label><input type="text" id="contrib-topic-title" placeholder="Your talk title" value="' + escapeHtml(payload.topicTitle || "") + '" /></div>' +
-          '<div class="field"><label>Abstract *</label><textarea id="contrib-abstract" rows="4" placeholder="Brief description of your talk (100-500 words)">' + escapeHtml(payload.abstract || "") + '</textarea></div>' +
-          '<div class="field"><label>Preferred Slot *</label><input type="text" id="contrib-preferred-slot" placeholder="e.g., Morning, Afternoon, or specific time" value="' + escapeHtml(payload.preferredSlot || "") + '" /></div>' +
-          '<div class="field"><label>Bio *</label><textarea id="contrib-bio" rows="3" placeholder="Short bio highlighting your expertise">' + escapeHtml(payload.bio || "") + '</textarea></div>';
+          '<div class="field vox-vbox"><label class="vox-label">Topic Title *</label><input type="text" id="contrib-topic-title" class="vox-input" placeholder="Your talk title" value="' + escapeHtml(payload.topicTitle || "") + '" /></div>' +
+          '<div class="field vox-vbox"><label class="vox-label">Abstract *</label><textarea id="contrib-abstract" class="vox-textarea" rows="4" placeholder="Brief description of your talk (100-500 words)">' + escapeHtml(payload.abstract || "") + '</textarea></div>' +
+          '<div class="field vox-vbox"><label class="vox-label">Preferred Slot *</label><input type="text" id="contrib-preferred-slot" class="vox-input" placeholder="e.g., Morning, Afternoon, or specific time" value="' + escapeHtml(payload.preferredSlot || "") + '" /></div>' +
+          '<div class="field vox-vbox"><label class="vox-label">Bio *</label><textarea id="contrib-bio" class="vox-textarea" rows="3" placeholder="Short bio highlighting your expertise">' + escapeHtml(payload.bio || "") + '</textarea></div>';
       } else if (role === "volunteer") {
         body =
-          '<div class="field"><label>Skills *</label><textarea id="contrib-skills" rows="3" placeholder="e.g., Registration desk, AV support, Photography, Crowd management">' + escapeHtml(payload.skills || "") + '</textarea></div>' +
-          '<div class="field"><label>Availability *</label><textarea id="contrib-availability" rows="3" placeholder="e.g., Full day, Morning only, Setup/Teardown">' + escapeHtml(payload.availability || "") + '</textarea></div>';
+          '<div class="field vox-vbox"><label class="vox-label">Skills *</label><textarea id="contrib-skills" class="vox-textarea" rows="3" placeholder="e.g., Registration desk, AV support, Photography, Crowd management">' + escapeHtml(payload.skills || "") + '</textarea></div>' +
+          '<div class="field vox-vbox"><label class="vox-label">Availability *</label><textarea id="contrib-availability" class="vox-textarea" rows="3" placeholder="e.g., Full day, Morning only, Setup/Teardown">' + escapeHtml(payload.availability || "") + '</textarea></div>';
       } else if (role === "topic_proposer") {
         body =
-          '<div class="field"><label>Topic Title *</label><input type="text" id="contrib-proposal-title" placeholder="Proposed topic title" value="' + escapeHtml(payload.topicTitle || "") + '" /></div>' +
-          '<div class="field"><label>Description *</label><textarea id="contrib-description" rows="4" placeholder="Detailed description of the proposed topic">' + escapeHtml(payload.description || "") + '</textarea></div>' +
-          '<div class="field"><label>Format *</label><select id="contrib-format">' +
+          '<div class="field vox-vbox"><label class="vox-label">Topic Title *</label><input type="text" id="contrib-proposal-title" class="vox-input" placeholder="Proposed topic title" value="' + escapeHtml(payload.topicTitle || "") + '" /></div>' +
+          '<div class="field vox-vbox"><label class="vox-label">Description *</label><textarea id="contrib-description" class="vox-textarea" rows="4" placeholder="Detailed description of the proposed topic">' + escapeHtml(payload.description || "") + '</textarea></div>' +
+          '<div class="field vox-vbox"><label class="vox-label">Format *</label><select id="contrib-format" class="vox-select">' +
           '<option value="">Select format...</option>' +
           '<option value="talk"' + (payload.format === "talk" ? " selected" : "") + '>Talk (20-30 min)</option>' +
           '<option value="lightning"' + (payload.format === "lightning" ? " selected" : "") + '>Lightning Talk (5-10 min)</option>' +
@@ -2555,6 +3020,7 @@
           '</select></div>';
       }
       $("#contrib-fields").innerHTML = body;
+      applyVoxFormClasses($("#contrib-fields"));
     }
     if (roleSel && !isResubmit) roleSel.addEventListener("change", renderFields);
     renderFields();
@@ -2707,12 +3173,14 @@
     var otpSendRequested = false;
     openModal(
       "<h3>Sign in</h3><p class='muted'>Email + 6-digit code. No passwords.</p>" +
+        '<div class="vox-form vox-vbox">' +
         '<div id="ts-login"></div>' +
-        "<p id='login-ts-hint' class='muted' style='font-size:0.8rem;margin:0 0 0.5rem'>Complete the check below, then enter your email and send the code.</p>" +
-        '<div class="field"><label>Email</label><input type="email" id="login-email" autocomplete="username" disabled /></div>' +
-        '<button type="button" id="login-send" class="btn-primary" disabled>Send code</button>' +
-        '<div class="field"><label>Code from email</label><input id="login-code" inputmode="numeric" maxlength="6" disabled placeholder="After you send the code" /></div>' +
-        '<button type="button" id="login-verify" class="btn-primary" disabled>Verify</button>'
+        "<p id='login-ts-hint' class='muted' style='font-size:0.8rem;margin:0'>Complete the check below, then enter your email and send the code.</p>" +
+        '<div class="field vox-vbox"><label class="vox-label">Email</label><input type="email" id="login-email" class="vox-input" autocomplete="username" disabled /></div>' +
+        '<button type="button" id="login-send" class="vox-btn vox-btn-primary" disabled>Send code</button>' +
+        '<div class="field vox-vbox"><label class="vox-label">Code from email</label><input id="login-code" class="vox-input" inputmode="numeric" maxlength="6" disabled placeholder="After you send the code" /></div>' +
+        '<button type="button" id="login-verify" class="vox-btn vox-btn-primary" disabled>Verify</button>' +
+        "</div>"
     );
     var sendBtn = $("#login-send");
     var verifyBtn = $("#login-verify");
@@ -2820,8 +3288,8 @@
               "<p class='muted'>Tell us your name so others know who you are. You can skip this for now.</p>" +
               "<div class='field'><label for='signup-name'>Your name</label><input type='text' id='signup-name' autocomplete='name' placeholder='e.g. Jane Smith' /></div>" +
               "<div style='display:flex;gap:0.5rem;margin-top:0.5rem'>" +
-              "<button type='button' id='signup-name-save' class='btn-primary'>Save name</button>" +
-              "<button type='button' id='signup-name-skip' class='btn-ghost'>Skip</button>" +
+              "<button type='button' id='signup-name-save' class='vox-btn vox-btn-primary'>Save name</button>" +
+              "<button type='button' id='signup-name-skip' class='vox-btn'>Skip</button>" +
               "</div>"
             );
             function finishSignup() {
@@ -2896,83 +3364,111 @@
     }
     return api("/api/me/dashboard").then(function (d) {
       state.dashboard = d;
+      var savedCount = (d.interestedEvents || []).length;
+      var regCount = (d.registrations || d.registeredEvents || []).length;
+      var rsvpCount = (d.rsvps || []).length;
+      var waitCount = (d.waitlist || []).length;
+      var contribCount = (d.contributions || []).length;
+
       var saved = (d.interestedEvents || [])
         .map(function (ev) {
           return (
-            "<li><a href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
+            "<li><a class='content-link' href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
             " <span class='muted'>" + escapeHtml(formatEventDateTime(ev.startsAt)) + "</span></li>"
           );
         })
-        .join("") || "<li class='muted'>Nothing saved yet — find something on the home page.</li>";
+        .join("");
+      if (!saved) {
+        saved = emptyStateHtml({
+          title: "Nothing saved yet",
+          body: "Tap Interested on an event to bookmark it here and on your calendar.",
+          action: "<a class='content-link' href='#/'>Discover events</a> · <a class='content-link' href='#/calendar'>Calendar</a>",
+        });
+      }
+      var savedPanel = savedCount
+        ? "<ul class='dash-list'>" + saved + "</ul>"
+        : saved;
 
       var regs = (d.registrations || d.registeredEvents || [])
         .map(function (r) {
-          // Backends differ — defensive shape
+          // Backends differ: defensive shape
           var ev = r.event || r;
           var ticketCode = r.ticketCode || (ev && ev.ticketCode) || null;
           var mode = ev.mode || (ev.is_external ? "external" : "in_person");
           var joinHtml = "";
           if (mode === "online" && ev.online_url) {
             joinHtml =
-              " <a class='btn-ghost' href='" + escapeHtml(ev.online_url) +
+              " <a class='vox-btn' href='" + escapeHtml(ev.online_url) +
               "' target='_blank' rel='noopener'>Join online</a>";
           }
           var ticketHtml = "";
           if (ticketCode) {
-            var ticketId = "ticket-" + Math.random().toString(36).substr(2, 9);
             ticketHtml =
-              "<div class='ticket' id='" + ticketId + "'><div><strong>Ticket:</strong> <code>" + escapeHtml(ticketCode) + "</code></div>" +
+              "<div class='vox-card ticket'><div><strong>Ticket:</strong> <code>" + escapeHtml(ticketCode) + "</code></div>" +
               "<img alt='Ticket QR code' src='/api/tickets/" + encodeURIComponent(ticketCode) + "/qr.svg' loading='lazy' />" +
-              "<div class='ticket-fallback' style='display:none; padding: 0.5rem; background: var(--bg-tertiary); border-radius: var(--radius); font-size: 0.875rem;'>" +
-              "Show this code at check-in: <strong style='color: var(--text-primary); font-size: 1.1rem;'>" + escapeHtml(ticketCode) + "</strong>" +
-              "</div></div>" +
-              "<script>" +
-              "(function() {" +
-              "  var img = document.querySelector('#" + ticketId + " img');" +
-              "  var fallback = document.querySelector('#" + ticketId + " .ticket-fallback');" +
-              "  if (img) {" +
-              "    img.onerror = function() {" +
-              "      img.style.display = 'none';" +
-              "      if (fallback) fallback.style.display = 'block';" +
-              "    };" +
-              "  }" +
-              "})();" +
-              "</script>";
+              "<button type='button' class='vox-btn vox-btn-primary' data-ticket-qr-fullscreen='" +
+              escapeHtml(ticketCode) +
+              "' data-ticket-title='" +
+              escapeHtml(ev.title || "Event") +
+              "'>Show QR full screen</button></div>";
           }
           return (
-            "<li><a href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
+            "<li><a class='content-link' href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
             " <span class='muted'>" + escapeHtml(formatEventDateTime(ev.startsAt)) + "</span>" + joinHtml +
-            " <button type='button' class='btn-ghost' data-cancel-registration='" + escapeHtml(ev.id) + "'>Cancel</button>" +
+            " <button type='button' class='vox-btn' data-cancel-registration='" + escapeHtml(ev.id) + "'>Cancel</button>" +
             ticketHtml + "</li>"
           );
         })
-        .join("") || "<li class='muted'>No registrations yet.</li>";
+        .join("");
+      if (!regs) {
+        regs = emptyStateHtml({
+          title: "No registrations yet",
+          body: "Register on an event page to get tickets, join links, and QR codes here.",
+          action: "<a class='content-link' href='#/'>Find an event</a>",
+        });
+      }
+      var regsPanel = regCount ? "<ul class='dash-list'>" + regs + "</ul>" : regs;
 
       var rsvps = (d.rsvps || [])
         .map(function (row) {
           var ev = row.event;
           var st = row.status || "maybe";
           return (
-            "<li><a href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
+            "<li><a class='content-link' href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
             " <span class='muted'>" + escapeHtml(formatEventDateTime(ev.startsAt)) + "</span>" +
-            " <span class='pill'>" + escapeHtml(st.replace(/_/g, " ")) + "</span>" +
-            " <button type='button' class='btn-ghost' data-dash-rsvp='going' data-dash-event='" + escapeHtml(ev.id) + "'>Going</button>" +
-            " <button type='button' class='btn-ghost' data-dash-rsvp='maybe' data-dash-event='" + escapeHtml(ev.id) + "'>Maybe</button>" +
-            " <button type='button' class='btn-ghost' data-dash-rsvp='not_going' data-dash-event='" + escapeHtml(ev.id) + "'>Not going</button>" +
+            " <span class='vox-badge pill'>" + escapeHtml(st.replace(/_/g, " ")) + "</span>" +
+            " <button type='button' class='vox-btn' data-dash-rsvp='going' data-dash-event='" + escapeHtml(ev.id) + "'>Going</button>" +
+            " <button type='button' class='vox-btn' data-dash-rsvp='maybe' data-dash-event='" + escapeHtml(ev.id) + "'>Maybe</button>" +
+            " <button type='button' class='vox-btn' data-dash-rsvp='not_going' data-dash-event='" + escapeHtml(ev.id) + "'>Not going</button>" +
             "</li>"
           );
         })
-        .join("") || "<li class='muted'>No RSVP updates yet.</li>";
+        .join("");
+      if (!rsvps) {
+        rsvps = emptyStateHtml({
+          title: "No RSVP updates yet",
+          body: "Set Going, Maybe, or Not going on an event page after you register or save interest.",
+          action: "<a class='content-link' href='#/about?guide=attend'>How RSVP works</a>",
+        });
+      }
+      var rsvpPanel = rsvpCount ? "<ul class='dash-list'>" + rsvps + "</ul>" : rsvps;
 
       var waitlist = (d.waitlist || [])
         .map(function (row) {
           var ev = row.event;
           return (
-            "<li><a href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
+            "<li><a class='content-link' href='#/event/" + escapeHtml(ev.id) + "'>" + escapeHtml(ev.title) + "</a>" +
             " <span class='muted'>Waitlisted at " + escapeHtml(formatEventDateTime(row.createdAt)) + "</span></li>"
           );
         })
-        .join("") || "<li class='muted'>No waitlist entries.</li>";
+        .join("");
+      if (!waitlist) {
+        waitlist = emptyStateHtml({
+          title: "No waitlist entries",
+          body: "When a full event opens a seat, you can be promoted automatically if you joined the waitlist.",
+        });
+      }
+      var waitPanel = waitCount ? "<ul class='dash-list'>" + waitlist + "</ul>" : waitlist;
 
       var contribs = (d.contributions || [])
         .map(function (c) {
@@ -2980,11 +3476,11 @@
           var eventTitle = c.event && c.event.title ? escapeHtml(c.event.title) : "Event";
           var detailText = "";
           if (c.role === "speaker" && payload.topicTitle) {
-            detailText = " — " + escapeHtml(payload.topicTitle);
+            detailText = ": " + escapeHtml(payload.topicTitle);
           } else if (c.role === "topic_proposer" && payload.topicTitle) {
-            detailText = " — " + escapeHtml(payload.topicTitle) + " (" + escapeHtml(payload.format || "unknown format") + ")";
+            detailText = ": " + escapeHtml(payload.topicTitle) + " (" + escapeHtml(payload.format || "unknown format") + ")";
           } else if (c.role === "volunteer") {
-            detailText = " — " + escapeHtml(payload.skills || "").substring(0, 30);
+            detailText = ": " + escapeHtml(payload.skills || "").substring(0, 30);
           }
           var infoRequested = c.status === "INFO_REQUESTED";
           var statusClass = c.status === "APPROVED" ? "style='color:var(--accent)'" :
@@ -2995,7 +3491,7 @@
             ? "<p class='muted'><strong>Organizer note:</strong> " + escapeHtml(c.organizerNote) + "</p>"
             : "";
           var resubmitBtn = infoRequested
-            ? " <button type='button' class='btn-primary' data-resubmit-contrib='" + escapeHtml(c.id) + "' data-event-id='" + escapeHtml(c.eventId) + "'>Resubmit information</button>"
+            ? " <button type='button' class='vox-btn vox-btn-primary' data-resubmit-contrib='" + escapeHtml(c.id) + "' data-event-id='" + escapeHtml(c.eventId) + "'>Resubmit information</button>"
             : "";
           return (
             "<li" + (infoRequested ? " class='contrib-info-requested'" : "") + ">" +
@@ -3003,12 +3499,23 @@
             "<strong>" + escapeHtml(c.role.replace(/_/g, " ")) + "</strong>" + detailText +
             " <span " + statusClass + ">" + escapeHtml(c.status.replace(/_/g, " ")) + "</span>" +
             noteHtml +
-            " <a href='#/event/" + escapeHtml(c.eventId) + "'>open event</a>" +
+            " <a class='content-link' href='#/event/" + escapeHtml(c.eventId) + "'>Open event</a>" +
             resubmitBtn +
             "</li>"
           );
         })
-        .join("") || "<li class='muted'>No contributions yet.</li>";
+        .join("");
+      if (!contribs) {
+        contribs = emptyStateHtml({
+          title: "No contributions yet",
+          body: "Speaker, volunteer, and topic proposals appear here after you submit them on an event page.",
+        });
+      }
+      var contribPanel = contribCount ? "<ul class='dash-list'>" + contribs + "</ul>" : contribs;
+
+      function dashTabLabel(label, count) {
+        return count > 0 ? label + " (" + count + ")" : label;
+      }
 
       var me = d.user || state.user || {};
       var profileName = escapeHtml(me.name || "");
@@ -3017,38 +3524,40 @@
       var verificationStatus = String(me.verificationRequestStatus || "none").toLowerCase();
       var verificationPill =
         verificationStatus === "pending"
-          ? "<span class='pill'>Verification request pending</span>"
-          : "<span class='pill'>Not submitted</span>";
+          ? "<span class='vox-badge pill'>Verification request pending</span>"
+          : "<span class='vox-badge pill'>Not submitted</span>";
       var verificationBtn =
         verificationStatus === "pending"
-          ? "<button type='button' class='btn-ghost' disabled>Verification submitted</button>"
-          : "<button type='button' class='btn-primary' data-apply-verification='1'>Apply for verification</button>";
+          ? "<button type='button' class='vox-btn' disabled>Verification submitted</button>"
+          : "<button type='button' class='vox-btn vox-btn-primary' data-apply-verification='1'>Apply for verification</button>";
 
       layout(
-        "<h2>Your dashboard</h2>" +
+        "<h2 class='vox-heading'>Your dashboard</h2>" +
           "<p class='muted'>Events you saved, signed up for, or contributed to.</p>" +
-          "<div class='dashboard-tabs' role='tablist' aria-label='Dashboard sections'>" +
-          "<button type='button' class='dash-tab active' data-dash-tab='saved' role='tab' aria-selected='true'>Saved</button>" +
-          "<button type='button' class='dash-tab' data-dash-tab='registered' role='tab' aria-selected='false'>Registration</button>" +
-          "<button type='button' class='dash-tab' data-dash-tab='rsvp' role='tab' aria-selected='false'>RSVP status</button>" +
-          "<button type='button' class='dash-tab' data-dash-tab='waitlist' role='tab' aria-selected='false'>Waitlist</button>" +
-          "<button type='button' class='dash-tab' data-dash-tab='contribs' role='tab' aria-selected='false'>Contributions</button>" +
-          "<button type='button' class='dash-tab' data-dash-tab='profile' role='tab' aria-selected='false'>Profile</button>" +
+          "<div class='vox-bar dashboard-tabs' role='tablist' aria-label='Dashboard sections'>" +
+          "<button type='button' class='vox-btn dash-tab active' data-dash-tab='saved' role='tab' aria-selected='true'>" + dashTabLabel("Saved", savedCount) + "</button>" +
+          "<button type='button' class='vox-btn dash-tab' data-dash-tab='registered' role='tab' aria-selected='false'>" + dashTabLabel("Registration", regCount) + "</button>" +
+          "<button type='button' class='vox-btn dash-tab' data-dash-tab='rsvp' role='tab' aria-selected='false'>" + dashTabLabel("RSVP status", rsvpCount) + "</button>" +
+          "<button type='button' class='vox-btn dash-tab' data-dash-tab='waitlist' role='tab' aria-selected='false'>" + dashTabLabel("Waitlist", waitCount) + "</button>" +
+          "<button type='button' class='vox-btn dash-tab' data-dash-tab='contribs' role='tab' aria-selected='false'>" + dashTabLabel("Contributions", contribCount) + "</button>" +
+          "<button type='button' class='vox-btn dash-tab' data-dash-tab='profile' role='tab' aria-selected='false'>Profile</button>" +
           "</div>" +
-          "<div class='dashboard-panels'>" +
-          "<section class='card dashboard-tab-panel active' data-dash-panel='saved'><h3>Saved</h3><ul class='dash-list'>" + saved + "</ul></section>" +
-          "<section class='card dashboard-tab-panel' data-dash-panel='registered'><h3>Registered</h3><ul class='dash-list'>" + regs + "</ul></section>" +
-          "<section class='card dashboard-tab-panel' data-dash-panel='rsvp'><h3>RSVP status</h3><ul class='dash-list'>" + rsvps + "</ul></section>" +
-          "<section class='card dashboard-tab-panel' data-dash-panel='waitlist'><h3>Waitlist</h3><ul class='dash-list'>" + waitlist + "</ul></section>" +
-          "<section class='card dashboard-tab-panel' data-dash-panel='contribs'><h3>Your contributions</h3><ul class='dash-list'>" + contribs + "</ul></section>" +
-          "<section class='card dashboard-tab-panel' data-dash-panel='profile'>" +
-          "<h3>Your profile</h3>" +
+          "<div class='dashboard-panels vox-vbox'>" +
+          "<section class='vox-card card dashboard-tab-panel active' data-dash-panel='saved'><h3 class='vox-heading'>Saved</h3>" + savedPanel + "</section>" +
+          "<section class='vox-card card dashboard-tab-panel' data-dash-panel='registered'><h3 class='vox-heading'>Registered</h3>" + regsPanel + "</section>" +
+          "<section class='vox-card card dashboard-tab-panel' data-dash-panel='rsvp'><h3 class='vox-heading'>RSVP status</h3>" + rsvpPanel + "</section>" +
+          "<section class='vox-card card dashboard-tab-panel' data-dash-panel='waitlist'><h3 class='vox-heading'>Waitlist</h3>" + waitPanel + "</section>" +
+          "<section class='vox-card card dashboard-tab-panel' data-dash-panel='contribs'><h3 class='vox-heading'>Your contributions</h3>" + contribPanel + "</section>" +
+          "<section class='vox-card card dashboard-tab-panel' data-dash-panel='profile'>" +
+          "<h3 class='vox-heading'>Your profile</h3>" +
           "<p class='muted'>Keep your basic details up to date, then apply for verification.</p>" +
-          "<div class='field'><label for='dash-profile-name'>Full name</label><input id='dash-profile-name' type='text' value='" + profileName + "' placeholder='Your full name' /></div>" +
-          "<div class='field'><label for='dash-profile-website'>Website</label><input id='dash-profile-website' type='url' value='" + profileWebsite + "' placeholder='https://example.com' /></div>" +
-          "<div class='field'><label for='dash-profile-bio'>Bio</label><textarea id='dash-profile-bio' rows='4' placeholder='Tell us a bit about you'>" + profileBio + "</textarea></div>" +
-          "<div class='profile-actions'><button type='button' class='btn-ghost' data-profile-save='1'>Save profile</button>" + verificationBtn + "</div>" +
+          "<div class='vox-form vox-vbox'>" +
+          "<div class='field vox-vbox'><label class='vox-label' for='dash-profile-name'>Full name</label><input id='dash-profile-name' class='vox-input' type='text' value='" + profileName + "' placeholder='Your full name' /></div>" +
+          "<div class='field vox-vbox'><label class='vox-label' for='dash-profile-website'>Website</label><input id='dash-profile-website' class='vox-input' type='url' value='" + profileWebsite + "' placeholder='https://example.com' /></div>" +
+          "<div class='field vox-vbox'><label class='vox-label' for='dash-profile-bio'>Bio</label><textarea id='dash-profile-bio' class='vox-textarea' rows='4' placeholder='Tell us a bit about you'>" + profileBio + "</textarea></div>" +
+          "<div class='vox-hbox profile-actions'><button type='button' class='vox-btn' data-profile-save='1'>Save profile</button>" + verificationBtn + "</div>" +
           "<div class='profile-status'>" + verificationPill + "</div>" +
+          "</div>" +
           "</section>" +
           "</div>" +
           "</div>"
@@ -3064,6 +3573,12 @@
             var key = tabBtn.getAttribute("data-dash-tab");
             if (!key) return;
             activateDashboardTab(key);
+            return;
+          }
+
+          var ticketQr = t.getAttribute("data-ticket-qr-fullscreen");
+          if (ticketQr) {
+            openTicketQrFullscreen(ticketQr, t.getAttribute("data-ticket-title") || "Your ticket");
             return;
           }
 
@@ -3190,7 +3705,7 @@
                 return (
                   "<li><strong>" +
                   escapeHtml(slot.topic) +
-                  "</strong> — " +
+                  "</strong>: " +
                   escapeHtml(slot.name) +
                   " · " +
                   escapeHtml(slot.stage) +
@@ -3211,7 +3726,7 @@
                 return (
                   "<li><strong>" +
                   escapeHtml(slot.title) +
-                  "</strong> — " +
+                  "</strong>: " +
                   escapeHtml(slot.room) +
                   " · " +
                   String(slot.capacity || 0) +
@@ -3234,7 +3749,7 @@
                   escapeHtml(slot.title) +
                   "</strong> (" +
                   escapeHtml(slot.boothCode) +
-                  ") — " +
+                  "): " +
                   escapeHtml(slot.owner) +
                   (slot.locationHint
                     ? "<br/><small class='muted'>" + escapeHtml(slot.locationHint) + "</small>"
@@ -3254,7 +3769,7 @@
                 return (
                   "<li><strong>" +
                   escapeHtml(slot.title) +
-                  "</strong> — " +
+                  "</strong>: " +
                   escapeHtml(formatEventDateTime(slot.startsAt)) +
                   " (" +
                   escapeHtml(slot.abstract || "") +
@@ -3270,9 +3785,9 @@
         : "<p class='muted'>Agenda details will appear here once the organizer adds speakers, booths, or sessions.</p>";
       var categoryBadge = '';
       if (ev.category === 'open_source') {
-        categoryBadge = '<span class="pill category-open">Open Source</span>';
+        categoryBadge = '<span class="vox-badge pill category-open">Opensource</span>';
       } else if (ev.category === 'fun_source') {
-        categoryBadge = '<span class="pill category-fun">Fun Source</span>';
+        categoryBadge = '<span class="vox-badge pill category-fun">Fun Source</span>';
       }
       var statsLine = '<span class="muted">' +
         (ev.viewCount || 0) + ' views · ' +
@@ -3317,18 +3832,19 @@
         "&location=" + encodeURIComponent(ev.location || "");
       var websiteLink =
         ev.website_url && isHttpUrl(ev.website_url)
-          ? "<p><a class='btn-ghost' href='" + escapeHtml(ev.website_url) + "' target='_blank' rel='noopener'>Visit official website</a></p>"
+          ? "<p><a class='vox-btn' href='" + escapeHtml(ev.website_url) + "' target='_blank' rel='noopener'>Visit official website</a></p>"
           : "";
       layout(
-        '<figure class="event-detail-banner">' +
-          '<img src="' + escapeHtml(eventBannerUrl(ev)) + '" alt="' +
-          escapeHtml((ev.title || "Event") + " banner") +
-          '" width="' + BANNER_PX + '" height="' + BANNER_PX + '" />' +
+        '<div class="event-detail-page vox-vbox">' +
+        '<figure class="event-detail-cover">' +
+          '<img class="event-detail-cover__img" src="' + escapeHtml(eventBannerUrl(ev)) + '" alt="' +
+          escapeHtml((ev.title || "Event") + " cover") +
+          '" loading="lazy" />' +
         "</figure>" +
-        "<h2>" +
+        "<h2 class='vox-heading'>" +
           escapeHtml(ev.title) +
           "</h2>" +
-          (categoryBadge ? '<div>' + categoryBadge + '</div>' : '') +
+          (categoryBadge ? '<div class="vox-hbox">' + categoryBadge + '</div>' : '') +
           "<p class='muted'>" +
           escapeHtml(formatEventWhen(ev.startsAt, ev.endsAt)) +
           " · " +
@@ -3338,36 +3854,49 @@
           "<p>" +
           escapeHtml(ev.description || "") +
           "</p>" +
-          "<section class='card'><h3>Attend</h3><div class='row'>" +
-          '<button type="button" class="btn-primary" data-native-register="' +
+          "<section class='vox-card card'><h3 class='vox-heading'>Attend</h3><div class='vox-hbox row'>" +
+          '<button type="button" class="vox-btn vox-btn-primary" data-native-register="' +
           escapeHtml(ev.id) +
           '">Register</button>' +
-          '<button type="button" class="btn-ghost" data-interest="' +
+          '<button type="button" class="vox-btn" data-interest="' +
           escapeHtml(ev.id) +
           '">Interested</button>' +
           "</div>" +
-          "<p class='muted guide-help-link'><a href='#/about?guide=attend'>How do Register, Interested, and RSVP work?</a></p>" +
+          "<p class='muted guide-help-link'><a class='content-link' href='#/about?guide=attend'>How do Register, Interested, and RSVP work?</a></p>" +
           "<div id='event-rsvp-panel' class='rsvp-panel'>" +
           "<p class='muted'>RSVP loading…</p>" +
           "</div></section>" +
           websiteLink +
-          "<section class='card'><h3>Share this event</h3><div class='row'>" +
-          "<a class='btn-ghost' href='" + escapeHtml(shareX) + "' target='_blank' rel='noopener'>X</a>" +
-          "<a class='btn-ghost' href='" + escapeHtml(shareLinkedin) + "' target='_blank' rel='noopener'>LinkedIn</a>" +
-          "<a class='btn-ghost' href='" + escapeHtml(shareFacebook) + "' target='_blank' rel='noopener'>Facebook</a>" +
-          "<a class='btn-ghost' href='" + escapeHtml(shareWhatsapp) + "' target='_blank' rel='noopener'>WhatsApp</a>" +
-          "<a class='btn-ghost' href='" + escapeHtml(shareEmail) + "'>Email</a>" +
-          "<button type='button' class='btn-ghost' id='event-native-share'>Share…</button>" +
-          "<button type='button' class='btn-primary' id='event-copy-share'>Copy event link</button>" +
-          "</div><div class='row'>" +
-          "<a class='btn-ghost' href='/api/events/" + escapeHtml(ev.id) + "/ics.ics'>Apple / ICS</a>" +
-          "<a class='btn-ghost' href='" + escapeHtml(gcal) + "' target='_blank' rel='noopener'>Google Calendar</a>" +
-          "<a class='btn-ghost' href='" + escapeHtml(outlookWeb) + "' target='_blank' rel='noopener'>Outlook</a>" +
+          "<section class='vox-card card event-share-section'><h3 class='vox-heading'>Share this event</h3>" +
+          "<div class='event-share-grid'>" +
+          eventShareTile({ href: shareX, label: "X", icon: "x", target: "_blank", rel: "noopener" }) +
+          eventShareTile({ href: shareLinkedin, label: "LinkedIn", icon: "linkedin", target: "_blank", rel: "noopener" }) +
+          eventShareTile({ href: shareFacebook, label: "Facebook", icon: "facebook", target: "_blank", rel: "noopener" }) +
+          eventShareTile({ href: shareWhatsapp, label: "WhatsApp", icon: "whatsapp", target: "_blank", rel: "noopener" }) +
+          eventShareTile({ href: shareEmail, label: "Email", icon: "email" }) +
+          eventShareTile({ id: "event-native-share", label: "Share", icon: "share", hidden: !navigator.share }) +
+          eventShareTile({ id: "event-copy-share", label: "Copy link", icon: "link", primary: true }) +
+          "</div>" +
+          "<p class='event-share-subhead'>Add to calendar</p>" +
+          "<div class='event-share-grid event-share-grid--calendar'>" +
+          eventShareTile({ href: "/api/events/" + ev.id + "/ics.ics", label: "Apple / ICS", icon: "ics" }) +
+          eventShareTile({ href: gcal, label: "Google Calendar", icon: "google", target: "_blank", rel: "noopener" }) +
+          eventShareTile({ href: outlookWeb, label: "Outlook", icon: "outlook", target: "_blank", rel: "noopener" }) +
           "</div></section>" +
-          "<section class='card'><h3>Agenda</h3>" +
+          "<section class='vox-card card'><h3 class='vox-heading'>Agenda</h3>" +
           agendaHtml +
           "</section>" +
-          '<p><a href="#/">← Back</a></p>'
+          '<nav class="vox-bar event-action-bar" aria-label="Quick actions">' +
+          '<button type="button" class="vox-btn vox-btn-primary" data-native-register="' +
+          escapeHtml(ev.id) +
+          '">Register</button>' +
+          '<button type="button" class="vox-btn" data-interest="' +
+          escapeHtml(ev.id) +
+          '">Interested</button>' +
+          '<a class="vox-btn" href="#/calendar">Calendar</a>' +
+          "</nav>" +
+          '<p class="event-detail-back"><a class="content-link" href="#/">← Back to Discover</a></p>' +
+          "</div>"
       );
       var copyBtn = $("#event-copy-share");
       if (copyBtn) {
@@ -3405,10 +3934,10 @@
         var summary = (data && data.summary) || {};
         var mine = data && data.mine ? data.mine.status : "";
         panel.innerHTML =
-          "<div class='row'>" +
-          "<button type='button' class='btn-ghost" + (mine === "going" ? " active" : "") + "' data-rsvp='going'>Going</button>" +
-          "<button type='button' class='btn-ghost" + (mine === "maybe" ? " active" : "") + "' data-rsvp='maybe'>Maybe</button>" +
-          "<button type='button' class='btn-ghost" + (mine === "not_going" ? " active" : "") + "' data-rsvp='not_going'>Not going</button>" +
+          "<div class='vox-hbox row'>" +
+          "<button type='button' class='vox-btn" + (mine === "going" ? " active" : "") + "' data-rsvp='going'>Going</button>" +
+          "<button type='button' class='vox-btn" + (mine === "maybe" ? " active" : "") + "' data-rsvp='maybe'>Maybe</button>" +
+          "<button type='button' class='vox-btn" + (mine === "not_going" ? " active" : "") + "' data-rsvp='not_going'>Not going</button>" +
           "</div>" +
           "<p class='muted'>Going " + String(summary.going || 0) +
           " · Maybe " + String(summary.maybe || 0) +
@@ -3480,7 +4009,7 @@
       if (lastReq && lastReq.status === "INFO_REQUESTED") {
         return renderOrgRequestStatus(lastReq, "info");
       }
-      // Rejected, expired, or never applied — let them start (or restart) the flow.
+      // Rejected, expired, or never applied: let them start (or restart) the flow.
       return renderBecomeOrganizer(lastReq);
     });
   }
@@ -3510,7 +4039,7 @@
     // For PENDING status, show read-only status
     layout(
       "<h2>Organize</h2>" +
-        "<section class='card'><h3>" +
+        "<section class='vox-card card'><h3>" +
         escapeHtml(heading) +
         "</h3>" +
         "<p>" +
@@ -3543,7 +4072,7 @@
     var actHtml = ACT.map(function (a) {
       var checked = existingActivities.indexOf(a[0]) >= 0 ? " checked" : "";
       return (
-        "<label class='checkbox'><input type='checkbox' name='org-activity' value='" +
+        "<label class='vox-label'><input type='checkbox' class='vox-checkbox' name='org-activity' value='" +
         a[0] +
         "'" + checked + " /> " +
         escapeHtml(a[1]) +
@@ -3557,7 +4086,7 @@
         "<div class='director-row'>" +
         "<div class='field'><label>Name</label><input class='dir-name' value='" + escapeHtml(d.name || "") + "' /></div>" +
         "<div class='field'><label>Link</label><input class='dir-link' value='" + escapeHtml(d.url || d.link || "") + "' /></div>" +
-        (idx > 0 ? "<button type='button' data-remove-director='1' class='btn-ghost'>Remove</button>" : "") +
+        (idx > 0 ? "<button type='button' data-remove-director='1' class='vox-btn'>Remove</button>" : "") +
         "</div>"
       );
     }).join("");
@@ -3575,10 +4104,11 @@
 
     layout(
       "<h2>Organize</h2>" +
-        "<section class='card'><h3>" + escapeHtml(heading) + "</h3>" +
+        "<section class='vox-card card'><h3>" + escapeHtml(heading) + "</h3>" +
         "<p>" + escapeHtml(lead) + "</p>" + note + "</section>" +
-        "<section class='card'><h3>Update your application</h3>" +
+        "<section class='vox-card card'><h3>Update your application</h3>" +
         "<p class='muted'>Update any fields below and click <strong>Resubmit application</strong>.</p>" +
+        "<div class='vox-form vox-vbox vox-form-wide'>" +
         "<div class='field'><label for='of-name'>Organization name</label><input id='of-name' value='" + escapeHtml(req.organizationName || "") + "' /></div>" +
         "<div class='field'><label for='of-web'>Website</label><input id='of-web' value='" + escapeHtml(req.website || "") + "' placeholder='https://example.org' /></div>" +
         "<div class='field'><label for='of-desc'>Description</label><textarea id='of-desc' rows='4'>" + escapeHtml(req.description || "") + "</textarea></div>" +
@@ -3587,22 +4117,22 @@
         "<fieldset class='field'><legend>Director / leadership</legend>" +
         "<p class='muted'>At least one director with a public professional link (LinkedIn, ORCID, GitHub, personal site, etc.).</p>" +
         "<div id='of-directors'>" + directorsHtml + "</div>" +
-        "<button type='button' id='of-add-director' class='btn-ghost'>Add another director</button>" +
+        "<button type='button' id='of-add-director' class='vox-btn'>Add another director</button>" +
         "</fieldset>" +
         "<fieldset class='field'><legend>How do you organize events?</legend>" +
-        "<label class='checkbox'><input type='checkbox' name='org-mode' value='in_person'" + modeInPerson + " /> In person</label>" +
-        "<label class='checkbox'><input type='checkbox' name='org-mode' value='online'" + modeOnline + " /> Online</label>" +
+        "<label class='vox-label'><input type='checkbox' class='vox-checkbox' name='org-mode' value='in_person'" + modeInPerson + " /> In person</label>" +
+        "<label class='vox-label'><input type='checkbox' class='vox-checkbox' name='org-mode' value='online'" + modeOnline + " /> Online</label>" +
         "<p class='muted'>Tick both if you do both.</p>" +
         "</fieldset>" +
         "<div class='field'><label for='of-motto'>Motto</label><textarea id='of-motto' rows='2'>" + escapeHtml(req.motto || "") + "</textarea></div>" +
         "<fieldset class='field'><legend>Are you part of Voxon.org?</legend>" +
-        "<label class='checkbox'><input type='radio' name='org-voxon' value='yes'" + voxonYes + " /> Yes</label>" +
-        "<label class='checkbox'><input type='radio' name='org-voxon' value='no'" + voxonNo + " /> No</label>" +
+        "<label class='vox-label'><input type='radio' class='vox-radio' name='org-voxon' value='yes'" + voxonYes + " /> Yes</label>" +
+        "<label class='vox-label'><input type='radio' class='vox-radio' name='org-voxon' value='no'" + voxonNo + " /> No</label>" +
         "</fieldset>" +
         "<div id='ts-orgreq-edit'></div>" +
-        "<div class='row'>" +
-        "<button type='button' id='of-resubmit' class='btn-primary' disabled>Resubmit application</button>" +
-        "</div></section>"
+        "<div class='vox-hbox row'>" +
+        "<button type='button' id='of-resubmit' class='vox-btn vox-btn-primary' disabled>Resubmit application</button>" +
+        "</div></div></section>"
     );
 
     // Add event listeners
@@ -3613,8 +4143,9 @@
       row.innerHTML =
         "<div class='field'><label>Name</label><input class='dir-name' /></div>" +
         "<div class='field'><label>Link</label><input class='dir-link' /></div>" +
-        "<button type='button' data-remove-director='1' class='btn-ghost'>Remove</button>";
+        "<button type='button' data-remove-director='1' class='vox-btn'>Remove</button>";
       holder.appendChild(row);
+      applyVoxFormClasses(row);
     });
 
     $("#of-directors").addEventListener("click", function (e) {
@@ -3665,14 +4196,14 @@
       var hasError = false;
       if (!name) { setFieldError("of-name", "Required."); hasError = true; }
       else if (rejectUnsafeText(name)) { setFieldError("of-name", rejectUnsafeText(name)); hasError = true; }
-      if (!web) { setFieldError("of-web", "Required — paste your public website URL."); hasError = true; }
+      if (!web) { setFieldError("of-web", "Required: paste your public website URL."); hasError = true; }
       else if (!isSafeHttpUrl(web)) {
         setFieldError("of-web", "Use a valid http(s) URL from your own site. Short links are not allowed.");
         hasError = true;
       }
-      if (!desc) { setFieldError("of-desc", "Required — describe what you do."); hasError = true; }
+      if (!desc) { setFieldError("of-desc", "Required: describe what you do."); hasError = true; }
       else if (rejectUnsafeText(desc)) { setFieldError("of-desc", rejectUnsafeText(desc)); hasError = true; }
-      if (!motto) { setFieldError("of-motto", "Required — even a short tagline helps."); hasError = true; }
+      if (!motto) { setFieldError("of-motto", "Required: even a short tagline helps."); hasError = true; }
       else if (rejectUnsafeText(motto)) { setFieldError("of-motto", rejectUnsafeText(motto)); hasError = true; }
       if (activities.length === 0) { toast("Pick at least one activity.", "info"); hasError = true; }
       if (modes.length === 0) { toast("Tell us if your events are in-person, online, or both.", "info"); hasError = true; }
@@ -3729,7 +4260,7 @@
     var prevNote = (prevReq && (prevReq.latestNote || (prevReq.decision && prevReq.decision.note))) || "";
     var rejectedNote =
       prevReq && prevReq.status === "REJECTED" && prevNote
-        ? "<div class='card'><h3>Previous application was not approved</h3>" +
+        ? "<div class='vox-card card'><h3>Previous application was not approved</h3>" +
           "<blockquote class='muted'>" +
           escapeHtml(prevNote) +
           "</blockquote>" +
@@ -3738,29 +4269,31 @@
     layout(
       "<h2>Become an organizer</h2>" +
         "<p class='muted'>Three short steps: a quick check, an email code, then your application. The EventMark admin reviews every request before you can publish events. " +
-        "<a href='#/about?guide=organizers'>Read the full organizer guide</a>.</p>" +
+        "<a class='about-link' href='#/about?guide=organizers'>Read the full organizer guide</a>.</p>" +
         rejectedNote +
         "<ol class='hemw-steps'>" +
-        "<li><strong>Step 1</strong> — quick check + send a verification code to your email.</li>" +
-        "<li><strong>Step 2</strong> — type the 9-digit code we email you.</li>" +
-        "<li><strong>Step 3</strong> — fill in your organization details and submit for review.</li>" +
+        "<li><strong>Step 1</strong>: quick check + send a verification code to your email.</li>" +
+        "<li><strong>Step 2</strong>: type the 9-digit code we email you.</li>" +
+        "<li><strong>Step 3</strong>: fill in your organization details and submit for review.</li>" +
         "</ol>" +
         "<section id='org-stage' class='card'></section>"
     );
     return showOrgRequestStep1();
   }
 
-  /* Step 1 — Turnstile + send code. */
+  /* Step 1: Turnstile + send code. */
   function showOrgRequestStep1() {
     var token = { value: "" };
     var emailVal = state.user ? state.user.email : "";
     $("#org-stage").innerHTML =
-      "<h3>Step 1 — Quick check</h3>" +
+      "<h3>Step 1: Quick check</h3>" +
       "<p class='muted'>We will email a 9-digit code to <strong>" +
       escapeHtml(emailVal) +
       "</strong>. Finish the check below, then click <em>Send code</em>.</p>" +
+      "<div class='vox-form vox-vbox'>" +
       "<div id='ts-orgreq'></div>" +
-      "<div class='row'><button type='button' id='org-send' class='btn-primary' disabled>Send code</button></div>";
+      "<div class='vox-hbox row'><button type='button' id='org-send' class='vox-btn vox-btn-primary' disabled>Send code</button></div></div>";
+    applyVoxFormClasses($("#org-stage"));
     renderTurnstile("ts-orgreq", token, function (ready) {
       var b = $("#org-send");
       if (b) b.disabled = !ready;
@@ -3789,18 +4322,20 @@
     });
   }
 
-  /* Step 2 — verify 9-digit code (with a fresh Turnstile token). */
+  /* Step 2: verify 9-digit code (with a fresh Turnstile token). */
   function showOrgRequestStep2() {
     var token = { value: "" };
     $("#org-stage").innerHTML =
-      "<h3>Step 2 — Verify your email</h3>" +
+      "<h3>Step 2: Verify your email</h3>" +
       "<p class='muted'>Enter the 9-digit code we just emailed you.</p>" +
+      "<div class='vox-form vox-vbox'>" +
       "<div class='field'><label for='org-code'>Code</label><input id='org-code' inputmode='numeric' autocomplete='one-time-code' maxlength='9' /></div>" +
       "<div id='ts-orgreq2'></div>" +
-      "<div class='row'>" +
-      "<button type='button' id='org-back' class='btn-ghost'>Resend code</button>" +
-      "<button type='button' id='org-verify' class='btn-primary' disabled>Verify</button>" +
-      "</div>";
+      "<div class='vox-hbox row'>" +
+      "<button type='button' id='org-back' class='vox-btn'>Resend code</button>" +
+      "<button type='button' id='org-verify' class='vox-btn vox-btn-primary' disabled>Verify</button>" +
+      "</div></div>";
+    applyVoxFormClasses($("#org-stage"));
     renderTurnstile("ts-orgreq2", token, function (ready) {
       var b = $("#org-verify");
       if (b) b.disabled = !ready;
@@ -3836,7 +4371,7 @@
     });
   }
 
-  /* Step 3 — full org application form. */
+  /* Step 3: full org application form. */
   function showOrgRequestStep3() {
     var token = { value: "" };
     var ACT = [
@@ -3849,7 +4384,7 @@
     var activeStepTab = "basics";
     var actHtml = ACT.map(function (a) {
       return (
-        "<label class='checkbox'><input type='checkbox' name='org-activity' value='" +
+        "<label class='vox-label'><input type='checkbox' class='vox-checkbox' name='org-activity' value='" +
         a[0] +
         "' /> " +
         escapeHtml(a[1]) +
@@ -3858,48 +4393,48 @@
     }).join("");
 
     $("#org-stage").innerHTML =
-      "<h3>Step 3 — Your organization</h3>" +
+      "<h3>Step 3: Your organization</h3>" +
       "<p class='muted'>The EventMark admin reads every field before approving. Complete each tab in order.</p>" +
-      "<div class='org-tabs' role='tablist' aria-label='Organization application tabs'>" +
-      "<button type='button' class='org-tab active' data-org-tab='basics' role='tab' aria-selected='true'>1. Basics</button>" +
-      "<button type='button' class='org-tab' data-org-tab='directors' role='tab' aria-selected='false'>2. Directors</button>" +
-      "<button type='button' class='org-tab' data-org-tab='activities' role='tab' aria-selected='false'>3. Activities</button>" +
-      "<button type='button' class='org-tab' data-org-tab='review' role='tab' aria-selected='false'>4. Review</button>" +
+      "<div class='vox-bar org-tabs' role='tablist' aria-label='Organization application tabs'>" +
+      "<button type='button' class='vox-btn org-tab active' data-org-tab='basics' role='tab' aria-selected='true'>1. Basics</button>" +
+      "<button type='button' class='vox-btn org-tab' data-org-tab='directors' role='tab' aria-selected='false'>2. Directors</button>" +
+      "<button type='button' class='vox-btn org-tab' data-org-tab='activities' role='tab' aria-selected='false'>3. Activities</button>" +
+      "<button type='button' class='vox-btn org-tab' data-org-tab='review' role='tab' aria-selected='false'>4. Review</button>" +
       "</div>" +
-      "<section class='org-tab-panel active' data-org-panel='basics'>" +
+      "<section class='vox-card org-tab-panel vox-form vox-vbox active' data-org-panel='basics'>" +
       "<div class='field'><label for='of-name'>Organization/Entity Name</label><input id='of-name' /></div>" +
       "<div class='field'><label for='of-web'>Website or Profile URL</label><input id='of-web' placeholder='https://example.org' /></div>" +
       "<div class='field'><label for='of-desc'>Description</label><textarea id='of-desc' rows='8' placeholder='Minimum " + ORG_DESCRIPTION_MIN_WORDS + " words. Tell us who you are, who you serve, and how you run events.'></textarea><small id='of-desc-meta' class='muted'>0 words (minimum " + ORG_DESCRIPTION_MIN_WORDS + ")</small></div>" +
-      "<div class='row'><button type='button' id='of-next-basics' class='btn-primary'>Next: Directors</button></div>" +
+      "<div class='vox-hbox row'><button type='button' id='of-next-basics' class='vox-btn vox-btn-primary'>Next: Directors</button></div>" +
       "</section>" +
-      "<section class='org-tab-panel' data-org-panel='directors'>" +
+      "<section class='vox-card org-tab-panel vox-form vox-vbox' data-org-panel='directors'>" +
       "<fieldset class='field'><legend>Add Director/Leadership/Admin Members</legend>" +
       "<p class='muted'>Add at least one member and mark at least one as verified before continuing.</p>" +
       "<div id='of-directors'></div>" +
-      "<button type='button' id='of-add-director' class='btn-ghost'>Add another member</button>" +
+      "<button type='button' id='of-add-director' class='vox-btn'>Add another member</button>" +
       "</fieldset>" +
-      "<div class='row'><button type='button' id='of-prev-directors' class='btn-ghost'>Back</button><button type='button' id='of-next-directors' class='btn-primary'>Next: Activities</button></div>" +
+      "<div class='vox-hbox row'><button type='button' id='of-prev-directors' class='vox-btn'>Back</button><button type='button' id='of-next-directors' class='vox-btn vox-btn-primary'>Next: Activities</button></div>" +
       "</section>" +
-      "<section class='org-tab-panel' data-org-panel='activities'>" +
+      "<section class='vox-card org-tab-panel vox-form vox-vbox' data-org-panel='activities'>" +
       "<fieldset class='field'><legend>Activities (pick at least one)</legend>" +
       "<div class='checkbox-grid'>" + actHtml + "</div></fieldset>" +
       "<fieldset class='field'><legend>How do you organize events?</legend>" +
-      "<label class='checkbox'><input type='checkbox' name='org-mode' value='in_person' /> In person</label>" +
-      "<label class='checkbox'><input type='checkbox' name='org-mode' value='online' /> Online</label>" +
+      "<label class='vox-label'><input type='checkbox' class='vox-checkbox' name='org-mode' value='in_person' /> In person</label>" +
+      "<label class='vox-label'><input type='checkbox' class='vox-checkbox' name='org-mode' value='online' /> Online</label>" +
       "<p class='muted'>Tick both if you do both.</p>" +
       "</fieldset>" +
       "<div class='field'><label for='of-motto'>How do you organize events? (short summary)</label><textarea id='of-motto' rows='2' placeholder='Share your operating model in one short line.'></textarea></div>" +
       "<fieldset class='field'><legend>Are you part of Voxon.org?</legend>" +
-      "<label class='checkbox'><input type='radio' name='org-voxon' value='yes' /> Yes</label>" +
-      "<label class='checkbox'><input type='radio' name='org-voxon' value='no' checked /> No</label>" +
+      "<label class='vox-label'><input type='radio' class='vox-radio' name='org-voxon' value='yes' /> Yes</label>" +
+      "<label class='vox-label'><input type='radio' class='vox-radio' name='org-voxon' value='no' checked /> No</label>" +
       "</fieldset>" +
-      "<div class='row'><button type='button' id='of-prev-activities' class='btn-ghost'>Back</button><button type='button' id='of-next-activities' class='btn-primary'>Next: Review</button></div>" +
+      "<div class='vox-hbox row'><button type='button' id='of-prev-activities' class='vox-btn'>Back</button><button type='button' id='of-next-activities' class='vox-btn vox-btn-primary'>Next: Review</button></div>" +
       "</section>" +
-      "<section class='org-tab-panel' data-org-panel='review'>" +
+      "<section class='vox-card org-tab-panel vox-form vox-vbox' data-org-panel='review'>" +
       "<h4>Review and submit</h4>" +
       "<div id='of-review' class='muted'>Review details will appear here.</div>" +
       "<div id='ts-orgreq3'></div>" +
-      "<div class='row'><button type='button' id='of-prev-review' class='btn-ghost'>Back</button><button type='button' id='of-cancel' class='btn-ghost'>Start over</button><button type='button' id='of-submit' class='btn-primary' disabled>Submit application</button></div>" +
+      "<div class='vox-hbox row'><button type='button' id='of-prev-review' class='vox-btn'>Back</button><button type='button' id='of-cancel' class='vox-btn'>Start over</button><button type='button' id='of-submit' class='vox-btn vox-btn-primary' disabled>Submit application</button></div>" +
       "</section>";
 
     function countWords(s) {
@@ -3951,12 +4486,12 @@
         var nameUnsafe = rejectUnsafeText(name);
         if (nameUnsafe) { setFieldError("of-name", nameUnsafe); hasError = true; }
       }
-      if (!web) { setFieldError("of-web", "Required — paste your public website URL."); hasError = true; }
+      if (!web) { setFieldError("of-web", "Required: paste your public website URL."); hasError = true; }
       else if (!isSafeHttpUrl(web)) {
         setFieldError("of-web", "Use a valid http(s) URL from your own site. Short links are not allowed.");
         hasError = true;
       }
-      if (!desc) { setFieldError("of-desc", "Required — describe what you do."); hasError = true; }
+      if (!desc) { setFieldError("of-desc", "Required: describe what you do."); hasError = true; }
       else {
         var descUnsafe = rejectUnsafeText(desc);
         if (descUnsafe) { setFieldError("of-desc", descUnsafe); hasError = true; }
@@ -4003,7 +4538,7 @@
       var ok = true;
       if (activities.length === 0) { toast("Pick at least one activity.", "info"); ok = false; }
       if (modes.length === 0) { toast("Tell us if your events are in-person, online, or both.", "info"); ok = false; }
-      if (!motto) { setFieldError("of-motto", "Required — this helps reviewers understand your event model."); ok = false; }
+      if (!motto) { setFieldError("of-motto", "Required: this helps reviewers understand your event model."); ok = false; }
       else if (rejectUnsafeText(motto)) { setFieldError("of-motto", rejectUnsafeText(motto)); ok = false; }
       return ok;
     }
@@ -4030,12 +4565,12 @@
         "<p><strong>Description:</strong> " + escapeHtml(words) + " words</p>" +
         "<p><strong>Members:</strong> " + escapeHtml(directors.length) + " (verified: " +
           escapeHtml(directors.filter(function (d) { return d.verified; }).length) + ")</p>" +
-        "<p><strong>Activities:</strong> " + escapeHtml(activities.join(", ") || "—") + "</p>" +
-        "<p><strong>Modes:</strong> " + escapeHtml(modes.join(", ") || "—") + "</p>" +
+        "<p><strong>Activities:</strong> " + escapeHtml(activities.join(", ") || " - ") + "</p>" +
+        "<p><strong>Modes:</strong> " + escapeHtml(modes.join(", ") || " - ") + "</p>" +
         "<p><strong>Part of Voxon.org:</strong> " + (voxonAffiliated ? "Yes" : "No") + "</p>";
     }
     addDirectorRow();
-
+    applyVoxFormClasses($("#org-stage"));
 
     var descEl = $("#of-desc");
     var descMeta = $("#of-desc-meta");
@@ -4107,15 +4642,15 @@
       var hasError = false;
       if (!name) { setFieldError("of-name", "Required."); hasError = true; }
       else if (rejectUnsafeText(name)) { setFieldError("of-name", rejectUnsafeText(name)); hasError = true; }
-      if (!web) { setFieldError("of-web", "Required — paste your public website URL."); hasError = true; }
+      if (!web) { setFieldError("of-web", "Required: paste your public website URL."); hasError = true; }
       else if (!isSafeHttpUrl(web)) {
         setFieldError("of-web", "Use a valid http(s) URL from your own site. Short links are not allowed.");
         hasError = true;
       }
-      if (!desc) { setFieldError("of-desc", "Required — describe what you do."); hasError = true; }
+      if (!desc) { setFieldError("of-desc", "Required: describe what you do."); hasError = true; }
       else if (rejectUnsafeText(desc)) { setFieldError("of-desc", rejectUnsafeText(desc)); hasError = true; }
       if (countWords(desc) < ORG_DESCRIPTION_MIN_WORDS) { setFieldError("of-desc", "Minimum " + ORG_DESCRIPTION_MIN_WORDS + " words is required."); hasError = true; }
-      if (!motto) { setFieldError("of-motto", "Required — even a short tagline helps."); hasError = true; }
+      if (!motto) { setFieldError("of-motto", "Required: even a short tagline helps."); hasError = true; }
       else if (rejectUnsafeText(motto)) { setFieldError("of-motto", rejectUnsafeText(motto)); hasError = true; }
       if (activities.length === 0) { toast("Pick at least one activity.", "info"); hasError = true; }
       if (modes.length === 0) { toast("Tell us if your events are in-person, online, or both.", "info"); hasError = true; }
@@ -4178,9 +4713,10 @@
     row.innerHTML =
       "<div class='field'><label>Name</label><input class='dir-name' /></div>" +
       "<div class='field'><label>Link (LinkedIn, ORCID, GitHub, personal)</label><input class='dir-link' placeholder='https://www.linkedin.com/in/…' /></div>" +
-      "<label class='checkbox'><input type='checkbox' class='dir-verified' /> Verified member</label>" +
-      "<div class='row'><button type='button' class='btn-ghost' data-remove-director='1'>Remove</button></div>";
+      "<label class='vox-label'><input type='checkbox' class='vox-checkbox dir-verified' /> Verified member</label>" +
+      "<div class='vox-hbox row'><button type='button' class='vox-btn' data-remove-director='1'>Remove</button></div>";
     holder.appendChild(row);
+    applyVoxFormClasses(row);
   }
 
   /** Workspace shown after the user has at least one approved organization. */
@@ -4192,27 +4728,29 @@
       .join("");
     layout(
       "<h2>Organize</h2>" +
-        "<p class='muted'>Welcome — your organization is approved. Create events as drafts first, publish when ready. " +
-        "<a href='#/about?guide=organizers'>Organizer guide</a> · " +
-        "<a href='#/about?guide=checkin'>Check-in help</a></p>" +
-        "<div id='org-ws-tabs' class='dashboard-tabs' role='tablist' aria-label='Organizer workspace'>" +
-        "<button type='button' class='dash-tab active' data-org-ws-tab='create' role='tab' aria-selected='true'>Create Event (Draft)</button>" +
-        "<button type='button' class='dash-tab' data-org-ws-tab='events' role='tab' aria-selected='false'>Your Events</button>" +
-        "<button type='button' class='dash-tab' data-org-ws-tab='suite' role='tab' aria-selected='false'>Invitation Suite</button>" +
-        "<button type='button' class='dash-tab' data-org-ws-tab='checkin-staff' role='tab' aria-selected='false'>Check-in staff</button>" +
-        "<button type='button' class='dash-tab' data-org-ws-tab='contributors' role='tab' aria-selected='false'>Contributor requests</button>" +
+        "<p class='muted'>Welcome: your organization is approved. Create events as drafts first, publish when ready. " +
+        "<a class='about-link' href='#/about?guide=organizers'>Organizer guide</a> · " +
+        "<a class='about-link' href='#/about?guide=checkin'>Check-in help</a></p>" +
+        "<div id='org-ws-tabs' class='vox-bar dashboard-tabs' role='tablist' aria-label='Organizer workspace'>" +
+        "<button type='button' class='vox-btn dash-tab active' data-org-ws-tab='create' role='tab' aria-selected='true'>Create Event (Draft)</button>" +
+        "<button type='button' class='vox-btn dash-tab' data-org-ws-tab='events' role='tab' aria-selected='false'>Your Events</button>" +
+        "<button type='button' class='vox-btn dash-tab' data-org-ws-tab='suite' role='tab' aria-selected='false'>Invitation Suite</button>" +
+        "<button type='button' class='vox-btn dash-tab' data-org-ws-tab='checkin-staff' role='tab' aria-selected='false'>Check-in staff</button>" +
+        "<button type='button' class='vox-btn dash-tab' data-org-ws-tab='contributors' role='tab' aria-selected='false'>Contributor requests</button>" +
         "</div>" +
         "<div class='dashboard-panels'>" +
-        "<section class='card dashboard-tab-panel active' data-org-ws-panel='create'><h3 id='ev-form-heading'>Create event (draft)</h3>" +
+        "<section class='vox-card card dashboard-tab-panel active' data-org-ws-panel='create'><h3 id='ev-form-heading'>Create event (draft)</h3>" +
+        "<div class='vox-form vox-vbox vox-form-wide'>" +
         "<div class='field'><label>Organization</label><select id='ev-org'>" + orgOptions + "</select></div>" +
         "<div class='field'><label for='ev-title'>Title</label><input id='ev-title' maxlength='26' /><small class='muted'>Maximum 26 characters.</small></div>" +
-        "<div class='field'><label for='ev-banner'>Event banner (150×150 square, max)</label>" +
+        "<div class='field'><label for='ev-banner'>Cover image</label>" +
         "<input type='file' id='ev-banner' accept='image/jpeg,image/png,image/webp,image/gif' />" +
         "<div id='ev-banner-preview-wrap' class='ev-banner-preview-wrap hidden'>" +
-        "<img id='ev-banner-preview' class='ev-banner-preview-img' alt='Banner preview' width='150' height='150' />" +
-        "<button type='button' id='ev-banner-clear' class='btn-ghost btn-small'>Remove</button>" +
+        "<img id='ev-banner-preview' class='ev-banner-preview-img' alt='Cover preview' />" +
+        "<p id='ev-banner-preview-meta' class='ev-banner-preview-meta muted'></p>" +
+        "<button type='button' id='ev-banner-clear' class='vox-btn vox-btn-sm'>Remove</button>" +
         "</div>" +
-        "<small class='muted'>Square images work best. We center-crop, resize to 150×150 pixels max, and optimize automatically.</small></div>" +
+        "<small class='muted'>Wide photos work best. We center-crop to a square, resize to 150×150 px, and optimize to max 69 KB (WebP).</small></div>" +
         "<div class='field'><label for='ev-desc'>Description</label><textarea id='ev-desc' rows='3'></textarea><small id='ev-desc-meta' class='muted'>0 / 500 words max. Emojis not allowed.</small></div>" +
         "<div class='field'><label for='ev-loc'>City / venue</label><input id='ev-loc' placeholder='City, venue, or campus' /></div>" +
         "<div class='field' id='ev-country-field'>" +
@@ -4222,56 +4760,57 @@
         "<ul id='ev-country-list' class='country-select-list hidden' role='listbox'></ul>" +
         "</div></div>" +
         "<fieldset class='field'><legend>Format</legend>" +
-        "<label class='checkbox'><input type='radio' name='ev-mode' value='in_person' checked /> In person</label>" +
-        "<label class='checkbox'><input type='radio' name='ev-mode' value='online' /> Online</label>" +
-        "<label class='checkbox'><input type='radio' name='ev-mode' value='hybrid' /> Both (hybrid)</label>" +
+        "<label class='vox-label'><input type='radio' class='vox-radio' name='ev-mode' value='in_person' checked /> In person</label>" +
+        "<label class='vox-label'><input type='radio' class='vox-radio' name='ev-mode' value='online' /> Online</label>" +
+        "<label class='vox-label'><input type='radio' class='vox-radio' name='ev-mode' value='hybrid' /> Both (hybrid)</label>" +
         "</fieldset>" +
         "<fieldset class='field'><legend>Category</legend>" +
-        "<label class='checkbox'><input type='radio' name='ev-category' value='open_source' /> Open Source</label>" +
-        "<label class='checkbox'><input type='radio' name='ev-category' value='hybrid' checked /> Hybrid</label>" +
+        "<label class='vox-label'><input type='radio' class='vox-radio' name='ev-category' value='open_source' /> Opensource</label>" +
+        "<label class='vox-label'><input type='radio' class='vox-radio' name='ev-category' value='hybrid' checked /> Hybrid</label>" +
         "</fieldset>" +
         "<div class='field'><label>Online link (only for online / hybrid)</label><input id='ev-online' placeholder='https://meet.example.com/…' /></div>" +
         "<div class='field'><label>Official event website (optional)</label><input id='ev-web' placeholder='https://event.example.com' /></div>" +
-        "<div class='row'>" +
+        "<div class='vox-hbox row'>" +
         "<div class='field'><label for='ev-start'>Starts</label><input type='datetime-local' id='ev-start' /></div>" +
         "<div class='field'><label for='ev-end'>Ends</label><input type='datetime-local' id='ev-end' /></div>" +
         "</div>" +
         "<small class='muted'>Use the calendar and time picker, or type date/time manually (end must be after start).</small>" +
-        "<div class='row'>" +
+        "<div class='vox-hbox row'>" +
         "<div class='field'><label for='ev-min'>Min seats</label><input id='ev-min' type='number' min='0' step='1' value='0' /></div>" +
         "<div class='field'><label for='ev-max'>Max seats (0 = unlimited)</label><input id='ev-max' type='number' min='0' step='1' value='0' /></div>" +
         "</div>" +
         "<small class='muted'>Seat counts cannot be negative.</small>" +
         "<fieldset class='field'><legend>Speakers</legend>" +
-        "<p class='muted'>Optional — add speaker names with their professional / association link.</p>" +
+        "<p class='muted'>Optional: add speaker names with their professional / association link.</p>" +
         "<div id='ev-speakers'></div>" +
-        "<button type='button' id='ev-add-speaker' class='btn-ghost'>Add speaker</button>" +
+        "<button type='button' id='ev-add-speaker' class='vox-btn'>Add speaker</button>" +
         "</fieldset>" +
-        "<div class='field'><label class='checkbox'><input type='checkbox' id='ev-ext' /> Registration handled on another website</label></div>" +
+        "<div class='field'><label class='vox-label'><input type='checkbox' class='vox-checkbox' id='ev-ext' /> Registration handled on another website</label></div>" +
         "<div class='field'><label>External registration URL</label><input id='ev-exturl' /></div>" +
         "<div id='ts-event'></div>" +
-        "<div class='row'>" +
-        "<button type='button' id='ev-create' class='btn-primary' disabled>Save as draft</button>" +
-        "<button type='button' id='ev-cancel-edit' class='btn-ghost' style='display:none'>Cancel edit</button>" +
+        "<div class='vox-hbox row'>" +
+        "<button type='button' id='ev-create' class='vox-btn vox-btn-primary' disabled>Save as draft</button>" +
+        "<button type='button' id='ev-cancel-edit' class='vox-btn' style='display:none'>Cancel edit</button>" +
+        "</div>" +
         "</div>" +
         "</section>" +
-        "<section class='card dashboard-tab-panel' data-org-ws-panel='events'><h3>Your events</h3>" +
+        "<section class='vox-card card dashboard-tab-panel' data-org-ws-panel='events'><h3>Your events</h3>" +
         "<div id='ev-list' class='muted'>Loading…</div>" +
         "</section>" +
-        "<section class='card dashboard-tab-panel' data-org-ws-panel='suite'><h3>Invitation Suite</h3>" +
+        "<section class='vox-card card dashboard-tab-panel' data-org-ws-panel='suite'><h3>Invitation Suite</h3>" +
         "<p class='muted'>Invite guests, track RSVP, issue pass QR tokens, run check-in, and manage speaker/booth/session details.</p>" +
-        "<div class='invitation-grid'>" +
+        "<div class='vox-form vox-vbox vox-form-wide invitation-grid'>" +
         "<div class='field'><label>Event</label><select id='suite-event'></select></div>" +
         "<div id='ts-suite'></div>" +
         "<div class='field'><label>Paste guests (email,name,role)</label><textarea id='suite-guests' rows='5' placeholder='alice@example.com,Alice,vip\nbob@example.com,Bob,attendee'></textarea></div>" +
-        "<div class='row'>" +
-        "<button type='button' id='suite-import' class='btn-primary'>Import invites</button>" +
-        "<button type='button' id='suite-load-invites' class='btn-ghost'>Load invites</button>" +
+        "<div class='vox-hbox row'>" +
+        "<button type='button' id='suite-import' class='vox-btn vox-btn-primary'>Import invites</button>" +
+        "<button type='button' id='suite-load-invites' class='vox-btn'>Load invites</button>" +
         "</div>" +
         "<div id='suite-invites' class='muted'>No invite data loaded.</div>" +
         "<hr class='suite-sep' />" +
         "<div class='field'><label>Check-in token (from QR)</label><input id='suite-checkin-token' placeholder='Paste token or scan ticket QR' /></div>" +
-        "<button type='button' id='suite-checkin' class='btn-primary'>Check in guest</button>" +
+        "<button type='button' id='suite-checkin' class='vox-btn vox-btn-primary'>Check in guest</button>" +
         "<div id='suite-checkin-result' class='muted'></div>" +
         "<div class='suite-scanner card'>" +
         "<h4>Camera QR scanner</h4>" +
@@ -4279,74 +4818,75 @@
         "<div id='suite-scan-permission' class='muted'>Camera permission not requested yet.</div>" +
         "<video id='suite-scan-video' playsinline muted autoplay></video>" +
         "<canvas id='suite-scan-canvas' hidden aria-hidden='true'></canvas>" +
-        "<div class='row'>" +
-        "<button type='button' id='suite-scan-permission-btn' class='btn-ghost'>Allow camera access</button>" +
-        "<button type='button' id='suite-scan-start' class='btn-primary' disabled>Start scanner</button>" +
-        "<button type='button' id='suite-scan-stop' class='btn-ghost'>Stop camera</button>" +
+        "<div class='vox-hbox row'>" +
+        "<button type='button' id='suite-scan-permission-btn' class='vox-btn'>Allow camera access</button>" +
+        "<button type='button' id='suite-scan-start' class='vox-btn vox-btn-primary' disabled>Start scanner</button>" +
+        "<button type='button' id='suite-scan-stop' class='vox-btn'>Stop camera</button>" +
         "</div>" +
         "<div id='suite-scan-status' class='muted'>Request camera permission to begin scanning.</div>" +
         "</div>" +
         "<hr class='suite-sep' />" +
         "<div class='suite-campaign card'>" +
         "<h4>Email campaigns</h4>" +
-        "<div class='row'>" +
+        "<div class='vox-hbox row'>" +
         "<div class='field'><label>Campaign type</label><select id='suite-campaign-type'><option value='invite'>Invite</option><option value='reminder'>Reminder</option><option value='pass'>Pass</option></select></div>" +
         "<div class='field'><label>Audience</label><select id='suite-campaign-audience'><option value='all'>All invites</option><option value='accepted'>Accepted only</option><option value='not_checked_in'>Not checked in</option><option value='checked_in'>Checked in</option><option value='pending_pass'>Accepted without pass</option></select></div>" +
         "</div>" +
-        "<button type='button' id='suite-campaign-send' class='btn-primary'>Send campaign</button>" +
+        "<button type='button' id='suite-campaign-send' class='vox-btn vox-btn-primary'>Send campaign</button>" +
         "<div id='suite-campaign-result' class='muted'></div>" +
         "</div>" +
         "<hr class='suite-sep' />" +
         "<div class='suite-analytics card'>" +
         "<h4>Corporate analytics</h4>" +
-        "<div class='row'>" +
-        "<button type='button' id='suite-analytics-load' class='btn-ghost'>Load analytics</button>" +
-        "<button type='button' id='suite-rsvp-reminders' class='btn-ghost'>Send RSVP reminders</button>" +
-        "<a id='suite-analytics-csv' class='btn-ghost' href='#' target='_blank' rel='noopener'>Export CSV</a>" +
+        "<div class='vox-hbox row'>" +
+        "<button type='button' id='suite-analytics-load' class='vox-btn'>Load analytics</button>" +
+        "<button type='button' id='suite-rsvp-reminders' class='vox-btn'>Send RSVP reminders</button>" +
+        "<a id='suite-analytics-csv' class='vox-btn' href='#' target='_blank' rel='noopener'>Export CSV</a>" +
         "</div>" +
         "<div id='suite-analytics-cards' class='suite-analytics-cards'></div>" +
         "</div>" +
         "<hr class='suite-sep' />" +
         "<div class='suite-three'>" +
-        "<div class='card'>" +
+        "<div class='vox-card card'>" +
         "<h4>Speakers</h4>" +
         "<div class='field'><label>Name</label><input id='suite-sp-name' /></div>" +
         "<div class='field'><label>Topic</label><input id='suite-sp-topic' /></div>" +
         "<div class='field'><label>Stage</label><input id='suite-sp-stage' /></div>" +
-        "<div class='row'><input id='suite-sp-start' type='datetime-local' /><input id='suite-sp-end' type='datetime-local' /></div>" +
-        "<button type='button' id='suite-sp-add' class='btn-ghost'>Add speaker slot</button>" +
+        "<div class='vox-hbox row'><input id='suite-sp-start' type='datetime-local' /><input id='suite-sp-end' type='datetime-local' /></div>" +
+        "<button type='button' id='suite-sp-add' class='vox-btn'>Add speaker slot</button>" +
         "<div id='suite-sp-list' class='muted'></div>" +
         "</div>" +
-        "<div class='card'>" +
+        "<div class='vox-card card'>" +
         "<h4>Booths</h4>" +
         "<div class='field'><label>Booth code</label><input id='suite-bo-code' /></div>" +
         "<div class='field'><label>Title</label><input id='suite-bo-title' /></div>" +
         "<div class='field'><label>Owner</label><input id='suite-bo-owner' /></div>" +
         "<div class='field'><label>Location hint</label><input id='suite-bo-loc' /></div>" +
-        "<button type='button' id='suite-bo-add' class='btn-ghost'>Add booth</button>" +
+        "<button type='button' id='suite-bo-add' class='vox-btn'>Add booth</button>" +
         "<div id='suite-bo-list' class='muted'></div>" +
         "</div>" +
-        "<div class='card'>" +
+        "<div class='vox-card card'>" +
         "<h4>Sessions</h4>" +
         "<div class='field'><label>Title</label><input id='suite-se-title' /></div>" +
         "<div class='field'><label>Room</label><input id='suite-se-room' /></div>" +
-        "<div class='row'><input id='suite-se-start' type='datetime-local' /><input id='suite-se-end' type='datetime-local' /></div>" +
+        "<div class='vox-hbox row'><input id='suite-se-start' type='datetime-local' /><input id='suite-se-end' type='datetime-local' /></div>" +
         "<div class='field'><label>Capacity</label><input id='suite-se-cap' type='number' min='1' value='50' /></div>" +
-        "<button type='button' id='suite-se-add' class='btn-ghost'>Add session</button>" +
+        "<button type='button' id='suite-se-add' class='vox-btn'>Add session</button>" +
         "<div id='suite-se-list' class='muted'></div>" +
         "</div>" +
         "</div>" +
         "</div>" +
         "</section>" +
-        "<section class='card dashboard-tab-panel' data-org-ws-panel='checkin-staff'><h3>Check-in staff</h3>" +
-        "<p class='muted'>Assign door check-in access by email. Staff sign in with OTP and use the Check-in desk in the header — no full organizer access required.</p>" +
+        "<section class='vox-card card dashboard-tab-panel' data-org-ws-panel='checkin-staff'><h3>Check-in staff</h3>" +
+        "<p class='muted'>Assign door check-in access by email. Staff sign in with OTP and use the Check-in desk in the header: no full organizer access required.</p>" +
+        "<div class='vox-form vox-vbox'>" +
         "<div class='field'><label>Organization</label><select id='staff-org'>" + orgOptions + "</select></div>" +
         "<div class='field'><label>Staff email</label><input id='staff-email' type='email' placeholder='staff@example.com' autocomplete='email' /></div>" +
         "<div id='ts-staff'></div>" +
-        "<button type='button' id='staff-add' class='btn-primary'>Assign check-in access</button>" +
+        "<button type='button' id='staff-add' class='vox-btn vox-btn-primary'>Assign check-in access</button>" +
         "<div id='staff-list' class='muted'>Loading…</div>" +
-        "</section>" +
-        "<section class='card dashboard-tab-panel' data-org-ws-panel='contributors'><h3>Contributor requests</h3>" +
+        "</div></section>" +
+        "<section class='vox-card card dashboard-tab-panel' data-org-ws-panel='contributors'><h3>Contributor requests</h3>" +
         "<p class='muted'>Select an event to view and manage contributor requests.</p>" +
         "<div id='rev-event-list'></div>" +
         "<div id='rev-debug-info' style='margin-top:1rem;padding:0.5rem;background:var(--bg-tertiary);border-radius:4px;font-size:0.8rem;display:none;'></div>" +
@@ -4415,7 +4955,7 @@
                   "<span>" +
                   escapeHtml(s.email) +
                   "</span>" +
-                  "<button type='button' class='btn-ghost btn-small' data-staff-remove='" +
+                  "<button type='button' class='vox-btn vox-btn-sm' data-staff-remove='" +
                   escapeHtml(s.id) +
                   "'>Remove</button>" +
                   "</li>"
@@ -4612,7 +5152,7 @@
         items
           .map(function (r) {
             var passBtn =
-              "<button type='button' class='btn-ghost' data-suite-pass='" +
+              "<button type='button' class='vox-btn' data-suite-pass='" +
               escapeHtml(r.id) +
               "'>Issue pass</button>";
             var passMeta = r.passToken
@@ -5485,7 +6025,7 @@
         optimizeEventBannerFile(file)
           .then(function (blob) {
             showPendingBannerPreview(blob);
-            toast("Banner optimized to 150×150.", "success");
+            toast("Cover optimized (" + formatBannerSize(blob.size) + ").", "success");
           })
           .catch(function (err) {
             evBannerInput.value = "";
@@ -5650,6 +6190,9 @@
           var eventId = isEdit ? editingEventId : (savedEvent && savedEvent.id);
           var bannerBlob = state.pendingBannerBlob;
           if (eventId && bannerBlob) {
+            if (bannerBlob.size > MAX_BANNER_BYTES) {
+              throw new Error("Cover image must be 69 KB or smaller after optimization.");
+            }
             if (b && document.body.contains(b)) {
               b.textContent = "Uploading banner…";
             }
@@ -5902,8 +6445,9 @@
       "<div class='field'><label>Name</label><input class='sp-name' maxlength='26' /><small class='muted'>Maximum 26 characters.</small></div>" +
       "<div class='field'><label>Professional / website link</label><input class='sp-link' placeholder='https://…' /></div>" +
       "<div class='field'><label>Association (optional)</label><input class='sp-assoc' placeholder='Company, university, group…' /></div>" +
-      "<div class='row'><button type='button' class='btn-ghost' data-remove-speaker='1'>Remove</button></div>";
+      "<div class='vox-hbox row'><button type='button' class='vox-btn' data-remove-speaker='1'>Remove</button></div>";
     holder.appendChild(row);
+    applyVoxFormClasses(row);
     if (speaker) {
       var nameEl = row.querySelector(".sp-name");
       var linkEl = row.querySelector(".sp-link");
@@ -5923,7 +6467,7 @@
           return String(b.startsAt || "").localeCompare(String(a.startsAt || ""));
         });
         if (!items.length) {
-          holder.innerHTML = "<p class='muted'>No events yet — create your first draft in the Create Event tab.</p>";
+          holder.innerHTML = "<p class='muted'>No events yet: create your first draft in the Create Event tab.</p>";
           return;
         }
         holder.innerHTML = items
@@ -5934,7 +6478,7 @@
               status === "published"
                 ? "<p class='muted'>Move back to draft to edit, then publish again when ready.</p>"
                 : ev.publishedOnce
-                  ? "<p class='muted'>Previously published — edit this draft and publish again when ready.</p>"
+                  ? "<p class='muted'>Previously published: edit this draft and publish again when ready.</p>"
                   : "";
             var eventUrl = window.location.origin + "/#/event/" + encodeURIComponent(ev.id);
             var shareX =
@@ -5951,10 +6495,10 @@
                 : "<span class='pill external'>Draft</span>";
             var actionBtn =
               status === "published"
-                ? "<button type='button' class='btn-ghost' data-unpublish='" + escapeHtml(ev.id) + "'>Move back to draft</button>"
-                : "<button type='button' class='btn-primary' data-publish='" + escapeHtml(ev.id) + "'>Publish</button>";
+                ? "<button type='button' class='vox-btn' data-unpublish='" + escapeHtml(ev.id) + "'>Move back to draft</button>"
+                : "<button type='button' class='vox-btn vox-btn-primary' data-publish='" + escapeHtml(ev.id) + "'>Publish</button>";
             var editBtn = editable
-              ? "<button type='button' class='btn-ghost' data-edit='" + escapeHtml(ev.id) + "'>Edit</button>"
+              ? "<button type='button' class='vox-btn' data-edit='" + escapeHtml(ev.id) + "'>Edit</button>"
               : "";
             return (
               "<article class='card'><h4>" + escapeHtml(ev.title) + "</h4>" +
@@ -5962,13 +6506,13 @@
               "<p class='muted'>" + escapeHtml(formatEventWhen(ev.startsAt, ev.endsAt)) + "</p>" +
               draftHint +
               (ev.website_url && isHttpUrl(ev.website_url)
-                ? "<p><a class='btn-ghost' href='" + escapeHtml(ev.website_url) + "' target='_blank' rel='noopener'>Official website</a></p>"
+                ? "<p><a class='vox-btn' href='" + escapeHtml(ev.website_url) + "' target='_blank' rel='noopener'>Official website</a></p>"
                 : "") +
-              "<div class='row'>" +
-              "<a class='btn-ghost' href='#/event/" + escapeHtml(ev.id) + "'>Open</a>" +
-              "<a class='btn-ghost' href='/api/events/" + escapeHtml(ev.id) + "/embed.html' target='_blank' rel='noopener'>Embed code</a>" +
-              "<a class='btn-ghost' href='" + escapeHtml(shareX) + "' target='_blank' rel='noopener'>X</a>" +
-              "<a class='btn-ghost' href='" + escapeHtml(shareLinkedin) + "' target='_blank' rel='noopener'>LinkedIn</a>" +
+              "<div class='vox-hbox row'>" +
+              "<a class='vox-btn' href='#/event/" + escapeHtml(ev.id) + "'>Open</a>" +
+              "<a class='vox-btn' href='/api/events/" + escapeHtml(ev.id) + "/embed.html' target='_blank' rel='noopener'>Embed code</a>" +
+              "<a class='vox-btn' href='" + escapeHtml(shareX) + "' target='_blank' rel='noopener'>X</a>" +
+              "<a class='vox-btn' href='" + escapeHtml(shareLinkedin) + "' target='_blank' rel='noopener'>LinkedIn</a>" +
               editBtn +
               actionBtn +
               "</div></article>"
@@ -5981,7 +6525,7 @@
       });
   }
 
-  /** Replaces stacked window.prompt calls — proper modal with note + optional slot + Turnstile. */
+  /** Replaces stacked window.prompt calls: proper modal with note + optional slot + Turnstile. */
   function openContribReviewModal(contribId, action) {
     var status =
       action === "approve"
@@ -6002,8 +6546,8 @@
         '<div class="field"><label for="cr-note">Note for contributor (optional)</label><textarea id="cr-note" rows="3"></textarea></div>' +
         slotFields +
         '<div id="cr-turnstile"></div>' +
-        '<div class="row"><button type="button" id="cr-cancel" class="btn-ghost">Cancel</button>' +
-        '<button type="button" id="cr-submit" class="btn-primary" disabled>' +
+        '<div class="row vox-hbox"><button type="button" id="cr-cancel" class="vox-btn">Cancel</button>' +
+        '<button type="button" id="cr-submit" class="vox-btn vox-btn-primary" disabled>' +
         escapeHtml(verb) +
         "</button></div>"
     );
@@ -6112,14 +6656,14 @@
       "</div>" +
       detailsHtml +
       (c.status === "PENDING_APPROVAL" ?
-        '<div class="row" style="margin-top:0.5rem">' +
-        '<button type="button" class="btn-primary" data-action="approve" data-id="' +
+        '<div class="vox-hbox row" style="margin-top:0.5rem">' +
+        '<button type="button" class="vox-btn vox-btn-primary" data-action="approve" data-id="' +
         escapeHtml(c.id) +
         '">Approve</button>' +
-        '<button type="button" class="btn-danger" data-action="reject" data-id="' +
+        '<button type="button" class="vox-btn vox-btn-danger" data-action="reject" data-id="' +
         escapeHtml(c.id) +
         '">Reject</button>' +
-        '<button type="button" class="btn-ghost" data-action="info" data-id="' +
+        '<button type="button" class="vox-btn" data-action="info" data-id="' +
         escapeHtml(c.id) +
         '">Request info</button>' +
         "</div>" :
@@ -6138,9 +6682,9 @@
     startAdminSessionTimeout();
     layout(
       "<div class='admin-header'><h2>Org request review</h2>" +
-        "<button type='button' id='admin-logout' class='btn-ghost'>Sign out</button></div>" +
+        "<button type='button' id='admin-logout' class='vox-btn'>Sign out</button></div>" +
         "<p class='muted'>You are the EventMark admin. Open each application and approve, reject, or ask for more info.</p>" +
-        "<div class='row'><button type='button' id='or-load' class='btn-ghost'>Refresh queue</button></div>" +
+        "<div class='vox-hbox row'><button type='button' id='or-load' class='vox-btn'>Refresh queue</button></div>" +
         "<div id='or-list' class='muted'>Loading…</div>"
     );
     attachAdminLogoutHandler();
@@ -6180,7 +6724,7 @@
       .map(function (d) {
         var link = d.url || d.link || "";
         return (
-          "<li><strong>" + escapeHtml(d.name) + "</strong> — " +
+          "<li><strong>" + escapeHtml(d.name) + "</strong>: " +
           "<a href='" + escapeHtml(link) + "' target='_blank' rel='noopener'>" + escapeHtml(link) + "</a></li>"
         );
       })
@@ -6192,7 +6736,7 @@
           ? "Online"
           : r.eventMode === "in_person"
             ? "In person"
-            : "—";
+            : " - ";
     var acts = (r.activities || []).map(function (a) {
       return "<span class='pill'>" + escapeHtml(a.replace(/_/g, " ")) + "</span>";
     }).join(" ");
@@ -6208,10 +6752,10 @@
       "<p><strong>Voxon-affiliated:</strong> " + (r.voxonAffiliated ? "Yes" : "No") + "</p>" +
       "<p><strong>Directors:</strong></p><ul>" + dirs + "</ul>" +
       "<p class='muted'>Submitted by " + escapeHtml(r.contactEmail || "") + " on " + escapeHtml(formatEventDateTime(r.createdAt)) + ".</p>" +
-      "<div class='row'>" +
-      "<button type='button' class='btn-primary' data-dec='approve' data-id='" + escapeHtml(r.id) + "'>Approve</button>" +
-      "<button type='button' class='btn-danger' data-dec='reject' data-id='" + escapeHtml(r.id) + "'>Reject</button>" +
-      "<button type='button' class='btn-ghost' data-dec='info' data-id='" + escapeHtml(r.id) + "'>Request more info</button>" +
+      "<div class='vox-hbox row'>" +
+      "<button type='button' class='vox-btn vox-btn-primary' data-dec='approve' data-id='" + escapeHtml(r.id) + "'>Approve</button>" +
+      "<button type='button' class='vox-btn vox-btn-danger' data-dec='reject' data-id='" + escapeHtml(r.id) + "'>Reject</button>" +
+      "<button type='button' class='vox-btn' data-dec='info' data-id='" + escapeHtml(r.id) + "'>Request more info</button>" +
       "</div></article>"
     );
   }
@@ -6231,9 +6775,9 @@
         "<p class='muted'>" + escapeHtml(hint) + "</p>" +
         "<div class='field'><label for='ord-note'>Admin note</label><textarea id='ord-note' rows='4'></textarea></div>" +
         "<div id='ord-turnstile'></div>" +
-        "<div class='row'>" +
-        "<button type='button' id='ord-cancel' class='btn-ghost'>Cancel</button>" +
-        "<button type='button' id='ord-submit' class='" + (dec === "reject" ? "btn-danger" : "btn-primary") + "' disabled>" +
+        "<div class='vox-hbox row'>" +
+        "<button type='button' id='ord-cancel' class='vox-btn'>Cancel</button>" +
+        "<button type='button' id='ord-submit' class='vox-btn " + (dec === "reject" ? "vox-btn-danger" : "vox-btn-primary") + "' disabled>" +
         escapeHtml(verb) + "</button></div>"
     );
     renderTurnstile("ord-turnstile", token, function (ready) {
@@ -6276,7 +6820,7 @@
     startAdminSessionTimeout();
     layout(
       "<div class='admin-header'><h2>Site settings</h2>" +
-        "<button type='button' id='admin-logout' class='btn-ghost'>Sign out</button></div>" +
+        "<button type='button' id='admin-logout' class='vox-btn'>Sign out</button></div>" +
         "<p class='muted'>You are editing settings for this deployment. Each environment has its own data, so changes here only affect <strong>" +
         escapeHtml(state.config.environment || "this environment") +
         "</strong>.</p>" +
@@ -6296,15 +6840,15 @@
           "<div class='field'><label for='set-banner'>Site notice (shown to everyone)</label>" +
           "<textarea id='set-banner' rows='3'>" + escapeHtml(s.noticeBanner || "") + "</textarea>" +
           "<small class='muted'>Empty = no banner shown.</small></div>" +
-          "<div class='field'><label class='checkbox'><input type='checkbox' id='set-pause-orgs'" +
+          "<div class='field'><label class='vox-label'><input type='checkbox' class='vox-checkbox' id='set-pause-orgs'" +
           (s.pauseOrgRequests ? " checked" : "") +
           " /> Pause new organizer applications</label></div>" +
-          "<div class='field'><label class='checkbox'><input type='checkbox' id='set-pause-regs'" +
+          "<div class='field'><label class='vox-label'><input type='checkbox' class='vox-checkbox' id='set-pause-regs'" +
           (s.pauseRegistrations ? " checked" : "") +
           " /> Pause new event registrations</label></div>" +
           "<div id='set-turnstile'></div>" +
-          "<div class='row'>" +
-          "<button type='button' id='set-save' class='btn-primary' disabled>Save settings</button>" +
+          "<div class='vox-hbox row'>" +
+          "<button type='button' id='set-save' class='vox-btn vox-btn-primary' disabled>Save settings</button>" +
           "</div>" +
           (s.updatedAt
             ? "<p class='muted'>Last updated " + escapeHtml(s.updatedAt) + " by " + escapeHtml(s.updatedBy || "") + ".</p>"
@@ -6400,7 +6944,7 @@
     banner.className = "admin-timeout-banner";
     banner.innerHTML = 
       "<span>Admin session: Auto-logout in 5 min if inactive</span>" +
-      "<button id='admin-extend' class='btn-ghost btn-small'>Stay signed in</button>";
+      "<button id='admin-extend' class='vox-btn vox-btn-sm'>Stay signed in</button>";
     document.body.appendChild(banner);
     
     $("#admin-extend").addEventListener("click", function () {
@@ -6445,16 +6989,8 @@
     applyTheme(getTheme());
     var n = new Date();
     state.calendarMonth = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1));
-    initCalendarStripOnce();
     wireModalClose();
     document.addEventListener("click", function (e) {
-      var raw = e.target;
-      var closeEl = raw instanceof HTMLElement ? raw.closest("[data-cal-drawer-close]") : null;
-      if (closeEl) {
-        e.preventDefault();
-        closeCalendarDrawer();
-        return;
-      }
       var t = e.target;
       if (!(t instanceof HTMLElement)) return;
       if (t.id === "btn-more") {
@@ -6512,25 +7048,8 @@
       }
     });
     $("#btn-theme").addEventListener("click", toggleTheme);
-    var calBtn = $("#btn-calendar");
-    if (calBtn) {
-      calBtn.addEventListener("click", function () {
-        var d = $("#calendar-drawer");
-        if (!d) return;
-        if (d.classList.contains("open")) {
-          closeCalendarDrawer();
-        } else {
-          openCalendarDrawer();
-        }
-      });
-    }
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
-      var d = $("#calendar-drawer");
-      if (d && d.classList.contains("open")) {
-        e.preventDefault();
-        closeCalendarDrawer();
-      }
       // Close mobile nav on Escape
       var nav = $("#main-nav");
       if (nav && nav.classList.contains("open")) {

@@ -17,9 +17,9 @@ Contribution and source:
 - Repository: https://github.com/eventmark-org/eventmark
 - Contributions are welcome through issues and pull requests.
 
-Third-party open source
+Third-party opensource
 -------------------------
-EventMark bundles additional open source components (for example, QR code
+EventMark bundles additional opensource components (for example, QR code
 generation and scanning). See /third-party for copyright and license notices.
 
 Official MIT license text

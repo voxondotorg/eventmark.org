@@ -1,18 +1,19 @@
 /**
- * EventMark Worker — routing, Turnstile, sessions, KV, email (Cloudflare Send Email).
+ * EventMark Worker: routing, Turnstile, sessions, KV, email (Cloudflare Send Email).
  */
 
 import indexHtml from "./index.html";
-import stylesCss from "./styles.css";
+import appCss from "./app.css";
+import voxuiCss from "./voxui.css";
 // Classic browser script (IIFE); Wrangler inlines it as text. Excluded from `tsc` program (see tsconfig).
-// @ts-expect-error TS7016 — excluded `src/app.js` cannot carry module typings without breaking the browser bundle
+// @ts-expect-error TS7016 - excluded `src/app.js` cannot carry module typings without breaking the browser bundle
 import appJs from "./app.js";
 import logoWhiteSvg from "./assets/logo-white.svg";
 import logoBlackSvg from "./assets/logo-black.svg";
 import eventBannerDefaultJpg from "./assets/event-banner-default.jpg";
-// @ts-expect-error TS7016 — vendored browser bundle served as static JS
+// @ts-expect-error TS7016 - vendored browser bundle served as static JS
 import jsqrJs from "./assets/jsqr.js";
-// @ts-expect-error TS7016 — country list for searchable event location picker
+// @ts-expect-error TS7016 - country list for searchable event location picker
 import countriesJs from "./assets/countries.js";
 import mitLicenseText from "./legal/mit-license.txt";
 import thirdPartyNoticesText from "./legal/third-party-notices.txt";
@@ -377,8 +378,18 @@ async function dispatch(
       headers: { "content-type": "text/html; charset=utf-8" },
     });
   }
+  if (method === "GET" && pathname === "/voxui.css") {
+    return new Response(voxuiCss, {
+      headers: { "content-type": "text/css; charset=utf-8" },
+    });
+  }
+  if (method === "GET" && pathname === "/app.css") {
+    return new Response(appCss, {
+      headers: { "content-type": "text/css; charset=utf-8" },
+    });
+  }
   if (method === "GET" && pathname === "/styles.css") {
-    return new Response(stylesCss, {
+    return new Response(appCss, {
       headers: { "content-type": "text/css; charset=utf-8" },
     });
   }
@@ -723,10 +734,22 @@ async function handleApi(
     const user = await resolveSessionUser(env.KV, request.headers.get("Cookie"));
     if (!user) return json({ error: "unauthorized" }, { status: 401 });
     const u = await applyAdminBootstrap(env, user);
-    type DayBadge = { date: string; interested: boolean; participated: boolean };
+    type DayBadge = {
+      date: string;
+      interested: boolean;
+      participated: boolean;
+      rsvpGoing: boolean;
+      rsvpMaybe: boolean;
+    };
     const map = new Map<string, DayBadge>();
     const upsert = (dateKey: string, patch: Partial<DayBadge>) => {
-      const cur = map.get(dateKey) || { date: dateKey, interested: false, participated: false };
+      const cur = map.get(dateKey) || {
+        date: dateKey,
+        interested: false,
+        participated: false,
+        rsvpGoing: false,
+        rsvpMaybe: false,
+      };
       map.set(dateKey, { ...cur, ...patch, date: dateKey });
     };
     for (const i of await listInterestsForUser(env.KV, u.id)) {
@@ -748,6 +771,13 @@ async function handleApi(
       const ev = await getEvent(env.KV, c.eventId);
       if (!ev) continue;
       upsert(utcDateKeyFromIso(ev.startsAt), { participated: true });
+    }
+    for (const r of await listRsvpsForUser(env.KV, u.id)) {
+      const ev = await getEvent(env.KV, r.eventId);
+      if (!ev) continue;
+      const dk = utcDateKeyFromIso(ev.startsAt);
+      if (r.status === "going") upsert(dk, { rsvpGoing: true });
+      else if (r.status === "maybe") upsert(dk, { rsvpMaybe: true });
     }
     const badges = [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
     return json({ badges });
@@ -2284,7 +2314,7 @@ function buildEmbedHtml(ev: EventRecord): string {
       : ev.mode === "hybrid"
         ? `Hybrid · ${escapeHtml(ev.location || "")}`
         : escapeHtml(ev.location || "");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>:root{color-scheme:dark light}body{margin:0;padding:1rem;font-family:system-ui,sans-serif;background:#0a0a0a;color:#fff;border:1px solid #2a2a2a;border-radius:10px}a{color:#7cfc00}h1{font-size:1.1rem;margin:0 0 .35rem}.muted{color:#9a9a9a;font-size:.85rem}p{margin:.4rem 0}.btn{display:inline-block;background:#7cfc00;color:#0a0a0a;padding:.5rem .8rem;border-radius:8px;text-decoration:none;font-weight:600;margin-top:.5rem}</style></head><body><h1>${title}</h1><p class="muted" id="ev-when" data-starts="${escapeHtml(ev.startsAt)}" data-ends="${escapeHtml(ev.endsAt)}"></p><p class="muted">${where}</p><p>${desc}</p><p><a class="btn" href="/#/event/${escapeHtml(ev.id)}" target="_blank" rel="noopener">View on EventMark</a></p><script>(function(){var el=document.getElementById("ev-when");if(!el)return;var s=new Date(el.dataset.starts),e=new Date(el.dataset.ends);if(isNaN(s))return;el.textContent=s.toLocaleString()+(isNaN(e)?"":" — "+e.toLocaleString());})();</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>:root{color-scheme:dark light}body{margin:0;padding:1rem;font-family:system-ui,sans-serif;background:#0a0a0a;color:#fff;border:1px solid #2a2a2a;border-radius:10px}a{color:#7cfc00}h1{font-size:1.1rem;margin:0 0 .35rem}.muted{color:#9a9a9a;font-size:.85rem}p{margin:.4rem 0}.btn{display:inline-block;background:#7cfc00;color:#0a0a0a;padding:.5rem .8rem;border-radius:8px;text-decoration:none;font-weight:600;margin-top:.5rem}</style></head><body><h1>${title}</h1><p class="muted" id="ev-when" data-starts="${escapeHtml(ev.startsAt)}" data-ends="${escapeHtml(ev.endsAt)}"></p><p class="muted">${where}</p><p>${desc}</p><p><a class="btn" href="/#/event/${escapeHtml(ev.id)}" target="_blank" rel="noopener">View on EventMark</a></p><script>(function(){var el=document.getElementById("ev-when");if(!el)return;var s=new Date(el.dataset.starts),e=new Date(el.dataset.ends);if(isNaN(s))return;el.textContent=s.toLocaleString()+(isNaN(e)?"":" to "+e.toLocaleString());})();</script></body></html>`;
 }
 
 function escapeIcsText(s: string): string {

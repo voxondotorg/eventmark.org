@@ -1,5 +1,5 @@
 /**
- * EventMark — KV data layer and strict domain types.
+ * EventMark: KV data layer and strict domain types.
  * Key prefixes enable prefix scans for pagination at scale.
  */
 
@@ -28,7 +28,7 @@ export type OrgRequestStatus = "PENDING" | "INFO_REQUESTED" | "REJECTED" | "APPR
 /** Where the event happens. `hybrid` means both in-person + online channels. */
 export type EventMode = "in_person" | "online" | "hybrid";
 
-/** Event category per EventMark spec: Open Source vs Fun Source distinction. */
+/** Event category per EventMark spec: Opensource vs Fun Source distinction. */
 export type EventCategory = "open_source" | "fun_source" | "hybrid";
 
 /** Visitors/listings only see "published"; organizers can edit drafts privately. */

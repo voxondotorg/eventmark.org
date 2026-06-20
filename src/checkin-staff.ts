@@ -1,5 +1,5 @@
 /**
- * Door check-in staff — org-scoped attendance role (no full organizer access).
+ * Door check-in staff: org-scoped attendance role (no full organizer access).
  */
 
 import type { EventRecord, UserRecord } from "./db.js";

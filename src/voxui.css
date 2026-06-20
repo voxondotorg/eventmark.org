@@ -1,0 +1,842 @@
+/* VoxUI — Retro Terminal Design System (Explorer + Advanced Components) */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #0d0d0d;
+  --surface: #141414;
+  --surface-elevated: #1e1e1e;
+  --surface-hover: #252526;
+  --text: #f5f5f5;
+  --muted: #8a8a8a;
+  --dim: #555;
+  --line: #2a2a2a;
+  --cta: #fff;
+  --cta-text: #0d0d0d;
+  --selection: rgba(255,255,255,0.08);
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --radius: 6px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --header-h: 52px;
+  --touch-target: 44px;
+}
+
+:root[data-theme="light"] {
+  --bg: #fafafa;
+  --surface: #fff;
+  --surface-elevated: #f3f3f3;
+  --surface-hover: #ececec;
+  --text: #1a1a1a;
+  --muted: #666;
+  --dim: #999;
+  --line: #e0e0e0;
+  --cta: #1a1a1a;
+  --cta-text: #fff;
+  --selection: rgba(0,0,0,0.06);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Explorer Layout */
+.vox-explorer {
+  display: flex;
+  min-height: calc(100vh - var(--header-h) - 28px);
+}
+
+.vox-sidebar {
+  width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  padding: 20px 0;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.vox-sidebar h4 {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  padding: 0 20px;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.vox-nav-item {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 10px 20px;
+  color: var(--muted);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+
+.vox-nav-item:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.vox-nav-item.active {
+  color: var(--text);
+  background: var(--surface-elevated);
+  border-left-color: var(--text);
+}
+
+.vox-main {
+  flex: 1;
+  padding: 32px 40px;
+  max-width: 1000px;
+}
+
+@media (max-width: 768px) {
+  .vox-explorer { flex-direction: column; }
+  .vox-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); }
+  .vox-main { padding: 24px 20px; }
+}
+
+/* Chrome */
+.vox-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.vox-tabbar {
+  display: flex;
+  align-items: stretch;
+  height: var(--header-h);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vox-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-right: 1px solid var(--line);
+  text-decoration: none;
+  color: var(--text);
+  background: var(--surface-elevated);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.vox-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.vox-tab {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 16px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-right: 1px solid var(--line);
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+
+.vox-tab:hover { color: var(--text); background: var(--surface-hover); }
+.vox-tab.active { color: var(--text); background: var(--surface-elevated); position: relative; }
+.vox-tab.active::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--text);
+}
+
+.vox-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  margin-left: auto;
+  border-left: 1px solid var(--line);
+}
+
+/* Base Components */
+.vox-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding: 12px 22px;
+  min-height: var(--touch-target);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s var(--ease), border-color 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+
+.vox-btn:hover {
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+
+.vox-btn-primary {
+  background: var(--cta);
+  color: var(--cta-text);
+  border-color: var(--cta);
+}
+
+.vox-btn-primary:hover { opacity: 0.9; background: var(--cta); }
+
+.vox-icon-btn {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0 14px;
+  min-height: var(--touch-target);
+  min-width: var(--touch-target);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.vox-icon-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--muted);
+}
+
+.vox-input, .vox-textarea, .vox-select {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  padding: 14px 16px;
+  min-height: var(--touch-target);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.vox-input:focus, .vox-textarea:focus, .vox-select:focus {
+  border-color: var(--muted);
+}
+
+.vox-textarea { min-height: 120px; resize: vertical; }
+
+.vox-label {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  min-height: var(--touch-target);
+}
+
+.vox-checkbox, .vox-radio { accent-color: var(--text); width: 20px; height: 20px; cursor: pointer; }
+
+.vox-switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+}
+
+.vox-switch input { opacity: 0; width: 0; height: 0; }
+
+.vox-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  transition: .3s;
+}
+
+.vox-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: var(--text);
+  border-radius: 50%;
+  transition: .3s;
+}
+
+input:checked + .vox-slider {
+  background: var(--cta);
+  border-color: var(--cta);
+}
+
+input:checked + .vox-slider:before {
+  transform: translateX(20px);
+  background: var(--cta-text);
+}
+
+.vox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 480px) {
+  .vox-grid { grid-template-columns: 1fr; }
+}
+
+.vox-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  overflow: hidden;
+}
+
+.vox-card img:not(.event-card__banner):not(.event-detail-cover__img):not(.ev-banner-preview-img) {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  display: block;
+  border: 1px solid var(--line);
+}
+
+.vox-card-elevated {
+  background: var(--surface-elevated);
+}
+
+.vox-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface-elevated);
+}
+
+.vox-progress {
+  width: 100%;
+  height: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.vox-progress-bar {
+  height: 100%;
+  background: var(--text);
+  transition: width 0.3s var(--ease);
+}
+
+.vox-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vox-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  min-width: 480px;
+}
+
+.vox-table th, .vox-table td {
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.vox-table th {
+  color: var(--muted);
+  font-weight: 500;
+  background: var(--surface-elevated);
+}
+
+.vox-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.vox-modal.open { display: flex; }
+
+.vox-modal-content {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 420px;
+  padding: 24px;
+}
+
+.vox-toast {
+  position: fixed;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  display: none;
+  z-index: 300;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.vox-toast.show { display: block; }
+
+.vox-statusbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  gap: 14px;
+  z-index: 50;
+}
+
+.vox-status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #22c55e;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+/* === NEW COMPONENTS === */
+
+/* HBox & VBox */
+.vox-hbox {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.vox-vbox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vox-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* Bar (Toolbar) */
+.vox-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+/* Splitter */
+.vox-splitter {
+  display: flex;
+  height: 200px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.vox-splitter-panel {
+  flex: 1;
+  padding: 20px;
+  background: var(--surface);
+  overflow: auto;
+}
+
+.vox-splitter-handle {
+  width: 6px;
+  background: var(--line);
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+
+.vox-splitter-handle:hover {
+  background: var(--muted);
+}
+
+/* Carousel */
+.vox-carousel {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+}
+
+.vox-carousel-card {
+  min-width: 260px;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+
+/* Calendar (Personal .ics style) */
+.vox-calendar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.vox-calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.vox-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+
+.vox-calendar-day {
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.vox-calendar-day.today {
+  background: var(--cta);
+  color: var(--cta-text);
+  border-radius: 4px;
+}
+
+.vox-calendar-event {
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  background: var(--surface-elevated);
+  border-left: 3px solid var(--text);
+  margin-top: 8px;
+  font-family: var(--font-mono);
+}
+
+/* Date & Time Picker */
+.vox-date-picker, .vox-time-picker {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  padding: 14px 16px;
+  min-height: var(--touch-target);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  width: 100%;
+  max-width: 320px;
+}
+
+.vox-date-picker:focus, .vox-time-picker:focus {
+  border-color: var(--muted);
+}
+
+/* Tree Table */
+.vox-tree-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.vox-tree-table th, .vox-tree-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.vox-tree-table th {
+  color: var(--muted);
+  font-weight: 500;
+  background: var(--surface-elevated);
+}
+
+.vox-tree-row {
+  cursor: pointer;
+}
+
+.vox-tree-row:hover {
+  background: var(--surface-hover);
+}
+
+.vox-tree-indent {
+  display: inline-block;
+  width: 20px;
+}
+
+.vox-tree-toggle {
+  display: inline-block;
+  width: 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vox-demo-section { margin-bottom: 40px; }
+
+.vox-demo-title {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.vox-heading {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+}
+
+.component-section { display: none; }
+.component-section.active { display: block; }
+
+/* === EventMark app shell (tokens + utilities) === */
+:root {
+  --footer-height: 28px;
+  --danger: #ff5d5d;
+  --panel: var(--surface);
+  --panel-elevated: var(--surface-elevated);
+  --panel-hover: var(--surface-hover);
+  --border: var(--line);
+  --accent: var(--text);
+  --bg-color: var(--bg);
+  --text-color: var(--text);
+  --gutter: var(--dim);
+  --gutter-text: var(--muted);
+}
+
+:root[data-theme="light"],
+body[data-theme="light"],
+body.light {
+  --danger: #c82828;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.22;
+  z-index: -1;
+}
+
+:root[data-theme="light"] body::before,
+body.light::before {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+}
+
+.hidden { display: none !important; }
+
+.muted { color: var(--muted); }
+
+.vox-btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.vox-btn-danger:hover {
+  background: rgba(255, 93, 93, 0.1);
+  transform: translateY(-1px);
+}
+
+.vox-btn:disabled,
+.vox-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.vox-btn-sm {
+  min-height: 32px;
+  padding: 6px 14px;
+  font-size: 0.72rem;
+}
+
+#app.vox-main,
+.main.vox-main {
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.25rem;
+  min-height: calc(100vh - var(--header-h) - var(--footer-height));
+}
+
+.vox-modal .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  z-index: 0;
+}
+
+.vox-modal-content.modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100% - 2rem);
+  max-height: calc(100vh - 4rem);
+  overflow: auto;
+}
+
+.vox-modal .modal-close {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.35rem;
+  z-index: 2;
+}
+
+.vox-chrome.site-header {
+  border-bottom: none;
+}
+
+.vox-tab.nav-sign-out {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+
+@media (min-width: 769px) {
+  .nav-sign-out { display: none !important; }
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+}
+
+.checkbox-grid .vox-label {
+  margin-right: 0;
+}
+
+.field.vox-vbox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 0.75rem;
+}
+
+.field--error .vox-input,
+.field--error .vox-textarea,
+.field--error .vox-select,
+.field--error input:not([type="checkbox"]):not([type="radio"]),
+.field--error textarea,
+.field--error select,
+input[aria-invalid="true"],
+textarea[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--danger);
+  outline-color: var(--danger);
+}
+
+.field-error {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+fieldset.field.vox-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 0 0 0.75rem;
+  background: var(--surface);
+}
+
+fieldset.field legend {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 0 8px;
+}

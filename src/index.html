@@ -1,43 +1,56 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0d0d0d" />
-    <title>EventMark | Open Source Events</title>
+    <title>EventMark | Opensource Events</title>
     <link rel="icon" type="image/svg+xml" href="/assets/logo-white.svg" />
     <link rel="shortcut icon" href="/assets/logo-white.svg" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/voxui.css" />
+    <link rel="stylesheet" href="/app.css" />
+    <script>
+      (function () {
+        try {
+          var light = localStorage.getItem("eventmark_theme") === "light";
+          var mode = light ? "light" : "dark";
+          document.documentElement.setAttribute("data-theme", mode);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", light ? "#fafafa" : "#0d0d0d");
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body>
-    <header class="site-header editor-chrome">
-      <div class="header-primary tab-bar">
-        <a class="brand brand-lg brand-tab" href="#/" aria-label="EventMark home">
-          <img id="brand-logo" src="/assets/logo-white.svg" alt="EventMark" />
+  <body data-theme="dark">
+    <header class="vox-chrome site-header">
+      <div class="vox-tabbar header-primary">
+        <a class="vox-brand brand" href="#/" aria-label="EventMark home">
+          <img id="brand-logo" src="/assets/logo-white.svg" alt="EventMark" width="28" height="28" />
           <span class="brand-title">EventMark</span>
         </a>
 
-        <nav id="main-nav" class="nav nav-tabs" aria-label="Primary">
-          <a href="#/">Discover</a>
-          <a href="#/about">About</a>
-          <a href="#/organize" class="nav-auth-only hidden">Organize</a>
-          <a href="#/dashboard" class="nav-auth-only hidden">Dashboard</a>
-          <a href="#/checkin-desk" class="nav-auth-only nav-checkin-desk-only hidden">Check-in desk</a>
-          <button id="btn-logout-nav" type="button" class="nav-auth-only nav-sign-out hidden">Sign out</button>
+        <nav id="main-nav" class="vox-tabs nav" aria-label="Primary">
+          <a href="#/" class="vox-tab">Discover</a>
+          <a href="#/calendar" class="vox-tab">Calendar</a>
+          <a href="#/about" class="vox-tab">About</a>
+          <a href="#/organize" class="vox-tab nav-auth-only hidden">Organize</a>
+          <a href="#/dashboard" class="vox-tab nav-auth-only hidden">Dashboard</a>
+          <a href="#/checkin-desk" class="vox-tab nav-auth-only nav-checkin-desk-only hidden">Check-in desk</a>
+          <button id="btn-logout-nav" type="button" class="vox-tab nav-auth-only nav-sign-out hidden">Sign out</button>
         </nav>
 
-        <div class="row tab-actions header-auth">
-          <button id="btn-login" type="button" class="btn-primary header-auth-desktop">Sign in</button>
-          <button id="btn-logout" type="button" class="btn-ghost hidden header-auth-desktop">Sign out</button>
+        <div class="vox-actions header-auth">
+          <button id="btn-login" type="button" class="vox-btn vox-btn-primary header-auth-desktop">Sign in</button>
+          <button id="btn-logout" type="button" class="vox-btn hidden header-auth-desktop">Sign out</button>
           <div class="header-mobile-controls">
-            <button id="btn-profile" type="button" class="header-profile-btn header-profile-btn--guest" aria-label="Profile">
+            <button id="btn-profile" type="button" class="vox-icon-btn header-profile-btn header-profile-btn--guest" aria-label="Profile">
               <svg class="profile-guest-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"></circle>
                 <path d="M5 20c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
               </svg>
               <span id="user-verified-badge" class="user-verified-badge hidden" aria-hidden="true"></span>
             </button>
-            <button id="mobile-nav-toggle" class="mobile-nav-toggle icon-btn" type="button" aria-label="Toggle menu" aria-expanded="false">
+            <button id="mobile-nav-toggle" class="vox-icon-btn mobile-nav-toggle" type="button" aria-label="Toggle menu" aria-expanded="false">
               <svg class="hamburger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
               </svg>
@@ -49,33 +62,19 @@
 
     <div id="nav-overlay" class="nav-overlay" aria-hidden="true"></div>
 
-    <aside id="calendar-drawer" class="calendar-drawer" aria-hidden="true">
-      <button type="button" class="calendar-drawer-backdrop" data-cal-drawer-close="1" aria-label="Close calendar"></button>
-      <section class="calendar-drawer-panel" role="dialog" aria-label="Event calendar">
-        <div class="calendar-drawer-head">
-          <strong class="calendar-drawer-title">Calendar</strong>
-          <button type="button" class="btn-ghost" data-cal-drawer-close="1">Close</button>
-        </div>
-        <div class="calendar-strip-wrap">
-          <div id="calendar-strip" class="calendar-strip"></div>
-          <div id="calendar-day-panel" class="calendar-day-panel hidden"></div>
-        </div>
-      </section>
-    </aside>
+    <main id="app" class="main vox-main" role="main"></main>
 
-    <main id="app" class="main" role="main"></main>
-
-    <div id="modal-root" class="modal-root" aria-hidden="true">
+    <div id="modal-root" class="vox-modal modal-root" aria-hidden="true">
       <button class="modal-backdrop" type="button" data-close="1" aria-label="Close dialog"></button>
-      <section class="modal-panel" role="dialog" aria-modal="true">
-        <button class="modal-close" type="button" data-close="1" aria-label="Close">×</button>
+      <section class="vox-modal-content modal-panel" role="dialog" aria-modal="true">
+        <button class="vox-icon-btn modal-close" type="button" data-close="1" aria-label="Close">×</button>
         <div id="modal-body" class="modal-body"></div>
       </section>
     </div>
 
-    <footer class="site-footer status-bar">
+    <footer class="vox-statusbar site-footer status-bar">
       <div class="status-left footer-left-row">
-        <span class="status-item footer-meta-online"><span class="status-dot"></span> Online</span>
+        <span class="status-item footer-meta-online"><span class="vox-status-dot status-dot"></span> Online</span>
         <span class="footer-meta-utf">UTF-8</span>
         <span id="footer-spaces-count">Spaces: 0</span>
       </div>
@@ -93,7 +92,7 @@
             <span class="footer-ticker-group">
               <a class="status-link" href="#/about">About</a>
               <a class="status-link" href="/license">MIT License</a>
-          <a class="status-link" href="/third-party">Third-party</a>
+              <a class="status-link" href="/third-party">Third-party</a>
               <a class="status-link" href="https://github.com/voxondotorg/eventmark.org" target="_blank" rel="noopener noreferrer">Contribute</a>
               <a class="status-link" href="https://voxon.org/vibe?product=eventmark" target="_blank" rel="noopener noreferrer">VIBE</a>
               <a class="status-link" href="https://voxon.org/contact.html" target="_blank" rel="noopener noreferrer">Contact Us</a>
@@ -101,7 +100,7 @@
             <span class="footer-ticker-group" aria-hidden="true">
               <a class="status-link" href="#/about">About</a>
               <a class="status-link" href="/license">MIT License</a>
-          <a class="status-link" href="/third-party">Third-party</a>
+              <a class="status-link" href="/third-party">Third-party</a>
               <a class="status-link" href="https://github.com/voxondotorg/eventmark.org" target="_blank" rel="noopener noreferrer">Contribute</a>
               <a class="status-link" href="https://voxon.org/vibe?product=eventmark" target="_blank" rel="noopener noreferrer">VIBE</a>
               <a class="status-link" href="https://voxon.org/contact.html" target="_blank" rel="noopener noreferrer">Contact Us</a>
@@ -113,7 +112,7 @@
         <div id="footer-social" class="footer-social" aria-label="Social links"></div>
         <a class="status-link footer-voxon-link" href="https://voxon.org" target="_blank" rel="noopener noreferrer">voxon.org<sup class="reg-mark">&reg;</sup></a>
         <div class="footer-controls">
-          <button id="btn-theme" class="btn-footer-theme status-btn" type="button" aria-label="Switch theme">
+          <button id="btn-theme" class="btn-footer-theme" type="button" aria-label="Switch theme">
             <svg class="theme-icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.5"></circle>
               <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17 4.9 19.1" stroke="currentColor" stroke-width="1.5"></path>
